@@ -6,5 +6,4 @@ matplotlib
 statsmodels
 prophet
 scikit-learn
-smtplib
 twilio
