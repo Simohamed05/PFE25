@@ -29,7 +29,7 @@ if uploaded_file:
     st.sidebar.header("📌 Navigation")
     option = st.sidebar.radio(
         "Choisissez une section :", 
-        ["🏠 Accueil", "📊 Tableau de bord", "📈 Analyse avancée", "⚠️ Alertes", "📉 Corrélations et insights",
+        ["🏠 Accueil", "📊 Tableau de bord", "📈 Analyse avancée", "⚠️ Alertes", 
          "🚀 Prédictions des ventes", "📂 Données Brutes"]
     )
 
@@ -112,14 +112,7 @@ if uploaded_file:
         st.plotly_chart(fig, use_container_width=True)
 
     # 📉 ANALYSE DE CORRÉLATION
-    elif option == "📉 Corrélations et insights":
-        st.title("📉 Corrélations et Insights")
-
-        # Matrice de corrélation corrigée
-        correlation_matrix = df.select_dtypes(include=["number"]).corr()
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", ax=ax)
-        st.pyplot(fig)
+    
 
     # 🚀 PRÉDICTIONS DES VENTES
     # 🚀 PRÉDICTIONS DES VENTES
