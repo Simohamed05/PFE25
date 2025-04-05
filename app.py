@@ -9,7 +9,6 @@ from sklearn.ensemble import RandomForestRegressor
 import base64
 from datetime import datetime
 import tempfile
-from fpdf import FPDF
 import plotly.io as pio
 import matplotlib.pyplot as plt
 from io import BytesIO
