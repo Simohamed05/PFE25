@@ -1,9 +1,7 @@
 streamlit
 pandas
 plotly
-seaborn
-matplotlib
 statsmodels
 prophet
 scikit-learn
-twilio
+openpyxl
