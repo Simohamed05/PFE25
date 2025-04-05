@@ -9,7 +9,6 @@ from sklearn.ensemble import RandomForestRegressor
 import base64
 from datetime import datetime
 import tempfile
-import plotly.io as pio
 import matplotlib.pyplot as plt
 from io import BytesIO
 import seaborn as sns
@@ -18,13 +17,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import re
 import warnings
-import streamlit as st
-import pandas as pd
-from datetime import datetime
-from io import BytesIO
-import base64
-import tempfile
-import matplotlib.pyplot as plt
+
 # Suppression des avertissements
 warnings.filterwarnings('ignore')
 
@@ -37,15 +30,12 @@ def append_to_excel(data, filename='utilisateurs.xlsx'):
     new_df = pd.DataFrame(data)
     
     if os.path.exists(filename):
-        # Lire les données existantes et les concaténer avec les nouvelles données
         existing_df = pd.read_excel(filename)
         updated_df = pd.concat([existing_df, new_df], ignore_index=True)
     else:
-        # Si le fichier n'existe pas, utiliser le nouveau DataFrame
         updated_df = new_df
     
     updated_df.to_excel(filename, index=False)
-
 
 # Configuration de la page
 st.set_page_config(
@@ -53,7 +43,6 @@ st.set_page_config(
     layout="wide",
     page_icon="📈"
 )
-
 
 # Traitement des données
 uploaded_file = st.sidebar.file_uploader("📤 Chargez un fichier CSV", type=["csv"])
@@ -93,7 +82,7 @@ if uploaded_file:
     ]
     option = st.sidebar.radio("Choisissez une section :", menu_options)
 
-    # Page d'accueil améliorée
+    # Page d'accueil
     if option == "🏠 Accueil":
         st.title("📊 Dashboard Intelligent de Prévision des Ventes")
         
@@ -278,11 +267,7 @@ if uploaded_file:
             fig.update_layout(title=f"Tendance de {variable} avec Moyenne Mobile")
             st.plotly_chart(fig, use_container_width=True)
 
-    # Section Alertes améliorée
-    # Section Alertes améliorée
-    # Section Alertes améliorée
-    # Section Alertes améliorée
-# Section Alertes améliorée
+    # Section Alertes
     elif option == "⚠️ Alertes":
         st.title("🚨 Système d'Alertes Intelligentes")
         
@@ -315,9 +300,9 @@ if uploaded_file:
                         'Produit': [produit],
                         'Seuil Baisse': [seuil_baisse],
                         'Seuil Hausse': [seuil_hausse],
-                        'Niveau de Stock': [niveau_stock],  # Nouveau champ
-                        'Ventes': [0],  # Valeur par défaut avant la détection des alertes
-                        'Variation': [0]  # Valeur par défaut avant la détection des alertes
+                        'Niveau de Stock': [niveau_stock],
+                        'Ventes': [0],
+                        'Variation': [0]
                     }
                     append_to_excel(user_alert_data, 'alertes_utilisateur.xlsx')
                     st.success("Configuration des alertes enregistrée!")
@@ -354,7 +339,7 @@ if uploaded_file:
                 'Produit': [produit],
                 'Seuil Baisse': [seuil_baisse],
                 'Seuil Hausse': [seuil_hausse],
-                'Niveau de Stock': [niveau_stock],  # Inclure le niveau de stock
+                'Niveau de Stock': [niveau_stock],
                 'Ventes': [ventes_sum],
                 'Variation': [variation_sum]
             }
@@ -362,10 +347,6 @@ if uploaded_file:
         
         if alertes_variation.empty:
             st.success("✅ Aucune alerte détectée avec les paramètres actuels")
-
-
-
-
 
     # Section Prédictions
     elif option == "🚀 Prédictions":
@@ -432,7 +413,7 @@ if uploaded_file:
                             'Jour': future_dates.day,
                             'Mois': future_dates.month,
                             'Année': future_dates.year,
-                            'JourSemaine': future_dates.dayofweek
+                                                        'JourSemaine': future_dates.dayofweek
                         })
                         
                         forecast = model.predict(future_X)
@@ -518,12 +499,7 @@ if uploaded_file:
             mime="text/csv"
         )
 
-    # Section Rapports améliorée
-
-
-    # Section des Rapports
-    # Section des Rapports
-# Section des Rapports
+    # Section Rapports
     elif option == "📊 Rapports":
         st.title("📑 Rapport Général des Ventes Amélioré")
 
@@ -609,7 +585,7 @@ if uploaded_file:
                     try:
                         # Création du message
                         msg = MIMEMultipart()
-                        msg['From'] = SMTP_USERNAME
+                        msg['From'] = SUPPORT_EMAIL  # Use the support email for sending
                         msg['To'] = SUPPORT_EMAIL
                         msg['Subject'] = f"Support Dashboard - Message de {nom}"
                         
@@ -640,4 +616,5 @@ if uploaded_file:
 
 else:
     st.info("ℹ️ Veuillez charger un fichier CSV pour commencer l'analyse")
-    
+
+                           
