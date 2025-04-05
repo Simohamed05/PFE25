@@ -9,6 +9,7 @@ from sklearn.ensemble import RandomForestRegressor
 import base64
 from datetime import datetime
 import tempfile
+from fpdf import FPDF
 import plotly.io as pio
 import matplotlib.pyplot as plt
 from io import BytesIO
@@ -18,6 +19,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import re
 import warnings
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+from io import BytesIO
+import base64
+import tempfile
+import matplotlib.pyplot as plt
 # Suppression des avertissements
 warnings.filterwarnings('ignore')
 
