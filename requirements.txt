@@ -5,3 +5,5 @@ statsmodels
 prophet
 scikit-learn
 openpyxl
+seaborn
+matplotlib
