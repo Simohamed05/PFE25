@@ -43,6 +43,22 @@ st.set_page_config(
     layout="wide",
     page_icon="📈"
 )
+def append_to_excel(data, filename='utilisateurs.xlsx'):
+    """Ajoute des données à un fichier Excel existant ou crée un nouveau fichier."""
+    new_df = pd.DataFrame(data)
+    
+    try:
+        if os.path.exists(filename):
+            existing_df = pd.read_excel(filename)
+            updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+        else:
+            updated_df = new_df
+            
+        updated_df.to_excel(filename, index=False)
+    except PermissionError:
+        st.error("Erreur de permission : impossible d'accéder ou de créer le fichier.")
+    except Exception as e:
+        st.error(f"Erreur lors de l'écriture dans le fichier : {str(e)}")
 
 # Traitement des données
 uploaded_file = st.sidebar.file_uploader("📤 Chargez un fichier CSV", type=["csv"])
