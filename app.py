@@ -284,13 +284,12 @@ if uploaded_file:
             st.plotly_chart(fig, use_container_width=True)
 
     # Section Alertes
+    # Section Alertes
     elif option == "⚠️ Alertes":
         st.title("🚨 Système d'Alertes Intelligentes")
         
-        # Formulaire pour entrer les informations de l'utilisateur
+        # Section configuration des alertes
         with st.expander("🔧 Configuration des Alertes", expanded=True):
-            st.write("Veuillez entrer vos informations pour configurer les alertes.")
-            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -302,68 +301,118 @@ if uploaded_file:
                 produit = st.selectbox("Produit à surveiller", df['Produit'].unique())
                 seuil_baisse = st.slider("Seuil de baisse (%)", 1, 50, 10)
                 seuil_hausse = st.slider("Seuil de hausse (%)", 1, 50, 15)
+                niveau_stock = df.loc[df['Produit'] == produit, 'Stock'].values[0] if 'Stock' in df.columns else 0
 
-            # Récupérer le niveau de stock à partir des données
-            niveau_stock = df.loc[df['Produit'] == produit, 'Stock'].values[0] if 'Stock' in df.columns else 0
-            
             if st.button("💾 Enregistrer la configuration"):
                 if nom_utilisateur and email_utilisateur and phone_utilisateur:
-                    # Enregistrer les informations de l'utilisateur et les alertes dans un seul fichier Excel
+                    # Calculer les vraies valeurs de ventes et variation
+                    df_product = df[df['Produit'] == produit].copy()
+                    df_product['Variation'] = df_product['Ventes'].pct_change() * 100
+                    
+                    # Dernières valeurs réelles
+                    dernieres_ventes = df_product['Ventes'].iloc[-1] if not df_product.empty else 0
+                    derniere_variation = df_product['Variation'].iloc[-1] if not df_product.empty else 0
+
                     user_alert_data = {
-                        'Nom': [nom_utilisateur],
-                        'Email': [email_utilisateur],
-                        'Téléphone': [phone_utilisateur],
-                        'Produit': [produit],
-                        'Seuil Baisse': [seuil_baisse],
-                        'Seuil Hausse': [seuil_hausse],
-                        'Niveau de Stock': [niveau_stock],
-                        'Ventes': [0],
-                        'Variation': [0]
+                        'Nom': nom_utilisateur,
+                        'Email': email_utilisateur,
+                        'Téléphone': phone_utilisateur,
+                        'Produit': produit,
+                        'Seuil Baisse': seuil_baisse,
+                        'Seuil Hausse': seuil_hausse,
+                        'Niveau de Stock': niveau_stock,
+                        'Ventes': dernieres_ventes,
+                        'Variation': derniere_variation,
+                        'Date Dernière Alerte': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
                     }
-                    append_to_excel(user_alert_data, 'alertes_utilisateur.xlsx')
-                    st.success("Configuration des alertes enregistrée!")
+
+                    # Sauvegarde des données
+                    new_df = pd.DataFrame([user_alert_data])
+                    
+                    if os.path.exists('alertes_utilisateur.xlsx'):
+                        existing_df = pd.read_excel('alertes_utilisateur.xlsx')
+                        
+                        # Mise à jour si l'utilisateur existe déjà
+                        mask = (existing_df['Email'] == email_utilisateur) | (existing_df['Téléphone'] == phone_utilisateur)
+                        if mask.any():
+                            existing_df.loc[mask, list(user_alert_data.keys())] = list(user_alert_data.values())
+                            updated_df = existing_df
+                        else:
+                            updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+                    else:
+                        updated_df = new_df
+                    
+                    updated_df.to_excel('alertes_utilisateur.xlsx', index=False)
+                    st.success("Configuration enregistrée avec succès!")
                 else:
                     st.warning("Veuillez remplir tous les champs obligatoires (*)")
 
+        # Section affichage des alertes
         st.markdown("---")
+        st.subheader("📊 Tableau des Alertes Actives")
         
-        # Détection des alertes
-        st.subheader("Détection des Alertes en Temps Réel")
-        df_product = df[df['Produit'] == produit].copy()
-        df_product['Variation'] = df_product['Ventes'].pct_change() * 100
-        
-        # Alertes de variation
-        alertes_variation = df_product[
-            (df_product['Variation'] <= -seuil_baisse) | 
-            (df_product['Variation'] >= seuil_hausse)
-        ]
-        
-        # Affichage des alertes
-        if not alertes_variation.empty:
-            st.warning(f"🚨 {len(alertes_variation)} alerte(s) de variation détectée(s)")
-            st.dataframe(alertes_variation[['Produit', 'Ventes', 'Variation']])
-            
-            # Mettre à jour les valeurs de ventes et variation
-            ventes_sum = alertes_variation['Ventes'].sum()
-            variation_sum = alertes_variation['Variation'].sum()
-            
-            # Enregistrer les alertes dans le même fichier avec les informations de l'utilisateur
-            alert_data = {
-                'Nom': [nom_utilisateur],
-                'Email': [email_utilisateur],
-                'Téléphone': [phone_utilisateur],
-                'Produit': [produit],
-                'Seuil Baisse': [seuil_baisse],
-                'Seuil Hausse': [seuil_hausse],
-                'Niveau de Stock': [niveau_stock],
-                'Ventes': [ventes_sum],
-                'Variation': [variation_sum]
-            }
-            append_to_excel(alert_data, 'alertes_utilisateur.xlsx')
-        
-        if alertes_variation.empty:
-            st.success("✅ Aucune alerte détectée avec les paramètres actuels")
+        try:
+            # Calculer les alertes pour tous les produits
+            alertes = []
+            for produit in df['Produit'].unique():
+                df_product = df[df['Produit'] == produit].copy()
+                df_product['Variation'] = df_product['Ventes'].pct_change() * 100
+                
+                # Dernier enregistrement
+                dernier = df_product.iloc[-1] if not df_product.empty else None
+                
+                if dernier is not None:
+                    # Vérifier les seuils
+                    alerte_baisse = dernier['Variation'] <= -seuil_baisse
+                    alerte_hausse = dernier['Variation'] >= seuil_hausse
+                    
+                    if alerte_baisse or alerte_hausse:
+                        alertes.append({
+                            'Produit': produit,
+                            'Dernières Ventes': dernier['Ventes'],
+                            'Variation (%)': dernier['Variation'],
+                            'Type Alerte': "⚠️ BAISSE" if alerte_baisse else "📈 HAUSSE",
+                            'Seuil Déclencheur': f"{seuil_baisse}%" if alerte_baisse else f"{seuil_hausse}%",
+                            'Date': dernier.name.strftime('%Y-%m-%d')
+                        })
 
+            # Afficher le tableau des alertes
+            if alertes:
+                df_alertes = pd.DataFrame(alertes)
+                
+                # Tri par variation (les plus fortes baisses en premier)
+                df_alertes = df_alertes.sort_values('Variation (%)', ascending=True)
+                
+                # Mise en forme conditionnelle
+                def color_alert(val):
+                    color = 'red' if "BAISSE" in str(val) else 'green'
+                    return f'color: {color}; font-weight: bold'
+                
+                st.dataframe(
+                    df_alertes.style.applymap(color_alert, subset=['Type Alerte']),
+                    column_config={
+                        "Variation (%)": st.column_config.NumberColumn(format="%.2f %%"),
+                        "Dernières Ventes": st.column_config.NumberColumn(format="%.0f DH")
+                    },
+                    use_container_width=True
+                )
+                
+                # Option pour exporter les alertes
+                csv = df_alertes.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📤 Exporter les alertes (CSV)",
+                    data=csv,
+                    file_name="alertes_produits.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.success("✅ Aucune alerte détectée avec les paramètres actuels")
+                
+        except Exception as e:
+            st.error(f"Erreur lors de la génération des alertes: {str(e)}")
+                    
+
+    # Section Prédictions
     # Section Prédictions
     elif option == "🚀 Prédictions":
         st.title("🚀 Prédictions des Ventes")
@@ -372,37 +421,20 @@ if uploaded_file:
         with col1:
             produit = st.selectbox("Sélectionnez un produit", df['Produit'].unique())
         with col2:
-            model_type = st.selectbox("Modèle de prévision", ["ARIMA", "Prophet", "Random Forest"])
+            model_type = st.selectbox("Modèle de prévision", ["Prophet", "Random Forest"])
         
         df_product = df[df['Produit'] == produit][['Ventes']]
         
         # Paramètres des modèles
         with st.expander("⚙️ Paramètres avancés"):
-            if model_type == "ARIMA":
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    p = st.slider("Ordre AR (p)", 0, 5, 1)
-                with col2:
-                    d = st.slider("Ordre de Différenciation (d)", 0, 2, 1)
-                with col3:
-                    q = st.slider("Ordre MA (q)", 0, 5, 1)
             
-            horizon = st.slider("Horizon de prévision (jours)", 7, 90, 30)
+            # Modification ici pour permettre jusqu'à 365 jours
+            horizon = st.slider("Horizon de prévision (jours)", 7, 365, 30)
         
         if st.button("🔮 Lancer la Prévision"):
             with st.spinner("Calcul des prévisions en cours..."):
                 try:
-                    if model_type == "ARIMA":
-                        model = ARIMA(df_product['Ventes'], order=(p, d, q))
-                        model_fit = model.fit()
-                        forecast = model_fit.forecast(steps=horizon)
-                        forecast_dates = pd.date_range(start=df_product.index[-1], periods=horizon+1, freq='D')[1:]
-                        forecast_df = pd.DataFrame({
-                            'Date': forecast_dates,
-                            'Prévision': forecast
-                        })
-                    
-                    elif model_type == "Prophet":
+                    if model_type == "Prophet":
                         prophet_df = df_product.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
                         model = Prophet()
                         model.fit(prophet_df)
@@ -429,7 +461,7 @@ if uploaded_file:
                             'Jour': future_dates.day,
                             'Mois': future_dates.month,
                             'Année': future_dates.year,
-                                                        'JourSemaine': future_dates.dayofweek
+                            'JourSemaine': future_dates.dayofweek
                         })
                         
                         forecast = model.predict(future_X)
@@ -480,7 +512,7 @@ if uploaded_file:
                 except Exception as e:
                     st.error(f"Erreur lors de la prévision : {str(e)}")
 
-    # Section Données brutes
+     # Section Données brutes
     elif option == "📂 Données Brutes":
         st.title("📂 Données Brutes")
         
@@ -514,12 +546,15 @@ if uploaded_file:
             file_name="donnees_filtrees.csv",
             mime="text/csv"
         )
-
     # Section Rapports
+    # Section Rapports
+# Section Rapports
     elif option == "📊 Rapports":
         st.title("📑 Rapport Général des Ventes Amélioré")
 
         st.subheader("1. Résumé des Performances")
+
+        # Calcul des métriques
         metrics = {
             "Période analysée": f"{df.index.min().strftime('%d/%m/%Y')} au {df.index.max().strftime('%d/%m/%Y')}",
             "Ventes Totales": f"{df['Ventes'].sum():,.0f} DH",
@@ -528,45 +563,76 @@ if uploaded_file:
             "Moyenne des Ventes": f"{df['Ventes'].mean():,.0f} DH",
             "Écart-Type des Ventes": f"{df['Ventes'].std():,.0f} DH",
             "Vente Min": f"{df['Ventes'].min():,.0f} DH",
-            "Vente Max": f"{df['Ventes'].max():,.0f} DH"
+            "Vente Max": f"{df['Ventes'].max():,.0f} DH",
+            "Médiane des Ventes": f"{df['Ventes'].median():,.0f} DH",
+            "Quartile 1": f"{df['Ventes'].quantile(0.25):,.0f} DH",
+            "Quartile 3": f"{df['Ventes'].quantile(0.75):,.0f} DH"
         }
 
-        for label, value in metrics.items():
-            st.write(f"**{label}**: {value}")
+        # Affichage des métriques avec explications et icônes
+        st.write("### 📅 Période analysée")
+        st.write(f"Cette période couvre plus de quatre ans d'activité, offrant une vue d'ensemble des tendances de vente sur le long terme.")
+        st.write(f"**Période analysée**: {metrics['Période analysée']}")
 
-        # Évolution des Ventes Mensuelles
-        st.subheader("2. Évolution des Ventes Mensuelles")
-        monthly_sales = df.resample('M').sum()
-        fig = px.line(monthly_sales, x=monthly_sales.index, y='Ventes', title="Ventes Mensuelles")
-        st.plotly_chart(fig, use_container_width=True)
+        st.write("### 💰 Ventes Totales")
+        st.write(f"Les ventes totales représentent le chiffre d'affaires généré par tous les produits pendant la période analysée. Ce montant indique la performance globale de l'entreprise et son succès commercial.")
+        st.write(f"**Ventes Totales**: {metrics['Ventes Totales']}")
 
-        # Top 5 Produits
-        st.subheader("3. Top 5 Produits")
-        top_products = df.groupby('Produit')['Ventes'].sum().nlargest(5).reset_index()
-        st.dataframe(top_products)
+        st.write("### 📦 Nombre de Produits")
+        st.write(f"Le nombre de produits vendus est une indication de la diversité de l'offre. Avoir plusieurs produits peut aider à attirer différents segments de clients et à maximiser les ventes.")
+        st.write(f"**Nombre de Produits**: {metrics['Nombre de Produits']}")
 
-        # Analyse des Ventes par Catégorie
-        if 'Categorie' in df.columns:
-            st.subheader("4. Analyse des Ventes par Catégorie")
-            category_sales = df.groupby('Categorie')['Ventes'].sum().reset_index()
-            fig = px.pie(category_sales, values='Ventes', names='Categorie', title="Répartition des Ventes par Catégorie")
-            st.plotly_chart(fig, use_container_width=True)
+        st.write("### 📈 Croissance Moyenne")
+        st.write(f"La croissance moyenne des ventes est un indicateur clé de la santé de l'entreprise. Une croissance de {metrics['Croissance Moyenne']} suggère que l'entreprise a connu une augmentation significative de ses ventes d'année en année.")
+        st.write(f"**Croissance Moyenne**: {metrics['Croissance Moyenne']}")
 
-        # Statistiques Descriptives
-        st.subheader("5. Statistiques Descriptives des Ventes")
-        st.write("Distribution des Ventes :")
+        st.write("### 🛒 Moyenne des Ventes")
+        st.write(f"La moyenne des ventes par transaction donne une idée du panier moyen des clients. Cela peut aider à évaluer si les clients achètent des produits à des prix compétitifs.")
+        st.write(f"**Moyenne des Ventes**: {metrics['Moyenne des Ventes']}")
+
+        st.write("### 📊 Écart-Type des Ventes")
+        st.write(f"L'écart-type mesure la variabilité des ventes. Un écart-type de {metrics['Écart-Type des Ventes']} indique que les ventes varient considérablement d'une période à l'autre.")
+        st.write(f"**Écart-Type des Ventes**: {metrics['Écart-Type des Ventes']}")
+
+        st.write("### 🔻 Vente Min et 🔺 Vente Max")
+        st.write(f"La vente minimale représente le montant le plus bas enregistré pour une transaction, tandis que la vente maximale montre le montant le plus élevé enregistré.")
+        st.write(f"**Vente Min**: {metrics['Vente Min']} | **Vente Max**: {metrics['Vente Max']}")
+
+        st.write("### 📏 Médiane et Quartiles")
+        st.write(f"La médiane des ventes est le point central des ventes, tandis que les quartiles aident à identifier les segments de marché.")
+        st.write(f"**Médiane des Ventes**: {metrics['Médiane des Ventes']}")
+        st.write(f"**Quartile 1**: {metrics['Quartile 1']} | **Quartile 3**: {metrics['Quartile 3']}")
+
+        # Ajoutez un graphique pour visualiser les ventes
+        st.subheader("📊 Visualisation des Ventes")
         fig = px.histogram(df, x='Ventes', nbins=30, title="Histogramme des Ventes")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Alertes et Notifications
-        st.subheader("6. Alertes et Notifications")
-        if 'Stock' in df.columns:
-            low_stock = df[df['Stock'] < 10]
-            if not low_stock.empty:
-                st.warning("Produits avec stock faible :")
-                st.dataframe(low_stock[['Produit', 'Stock']])
-            else:
-                st.success("Aucune alerte de stock faible détectée.")
+        # Option de téléchargement
+        st.subheader("💾 Télécharger le Rapport")
+        if st.button("💾 Télécharger le Rapport (CSV)"):
+            report_data = {
+                "Période analysée": [metrics["Période analysée"]],
+                "Ventes Totales": [metrics["Ventes Totales"]],
+                "Nombre de Produits": [metrics["Nombre de Produits"]],
+                "Croissance Moyenne": [metrics["Croissance Moyenne"]],
+                "Moyenne des Ventes": [metrics["Moyenne des Ventes"]],
+                "Écart-Type des Ventes": [metrics["Écart-Type des Ventes"]],
+                "Vente Min": [metrics["Vente Min"]],
+                "Vente Max": [metrics["Vente Max"]],
+                "Médiane des Ventes": [metrics["Médiane des Ventes"]],
+                "Quartile 1": [metrics["Quartile 1"]],
+                "Quartile 3": [metrics["Quartile 3"]]
+            }
+            report_df = pd.DataFrame(report_data)
+            csv = report_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="💾 Télécharger le rapport (CSV)",
+                data=csv,
+                file_name="rapport_ventes.csv",
+                mime="text/csv"
+            )
+
 
     # Section Support client
     elif option == "📞 Support":
