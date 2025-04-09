@@ -286,143 +286,151 @@ if uploaded_file:
     # Section Alertes
     # Section Alertes
     elif option == "⚠️ Alertes":
-        st.title("🚨 Système d'Alertes Intelligentes")
+    # Style CSS personnalisé
+        st.markdown("""
+        <style>
+        .alert-title {
+            color: #d63031;
+            font-size: 28px;
+            border-bottom: 2px solid #f1f1f1;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .alert-section {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #d63031;
+            color: #333;  /* Couleur de texte pour fond clair */
+        }
+        .alert-success {
+            background-color: #e8f5e9;
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 4px solid #2e7d32;
+            color: #2e7d32;  /* Couleur de texte pour fond vert clair */
+        }
+        .alert-warning {
+            background-color: #fff3e0;
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 4px solid #ff6d00;
+            color: #ff6d00;  /* Couleur de texte pour fond orange clair */
+        }
+        .stButton>button {
+            background-color: #d63031;
+            color: white;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .stButton>button:hover {
+            background-color: #c0392b;
+            transform: scale(1.02);
+        }
+        </style>
+
+        """, unsafe_allow_html=True)
+
+        st.markdown('<div class="alert-title">🚨 Système d\'Alertes Intelligentes</div>', unsafe_allow_html=True)
         
-        # Utilisation du stockage en session pour une meilleure persistance
-        if 'alertes_config' not in st.session_state:
-            st.session_state.alertes_config = pd.DataFrame(columns=[
-                'Nom', 'Email', 'Téléphone', 'Produit', 
-                'Seuil Baisse', 'Seuil Hausse', 'Niveau de Stock',
-                'Ventes', 'Variation', 'Date Dernière Alerte'
-            ])
-        
-        # Section configuration des alertes
+        # Formulaire pour entrer les informations de l'utilisateur
         with st.expander("🔧 Configuration des Alertes", expanded=True):
+            st.markdown('<div class="alert-section">Veuillez entrer vos informations pour configurer les alertes</div>', unsafe_allow_html=True)
+            
             col1, col2 = st.columns(2)
             
             with col1:
-                nom_utilisateur = st.text_input("Votre nom complet*", key="nom_alert")
-                email_utilisateur = st.text_input("Votre email*", key="email_alert")
-                phone_utilisateur = st.text_input("Votre numéro de téléphone*", key="phone_alert")
+                nom_utilisateur = st.text_input("**Votre nom complet***", placeholder="Ex: HADI Mohamed")
+                email_utilisateur = st.text_input("**Votre email***", placeholder="Ex: hadi@exemple.com")
+                phone_utilisateur = st.text_input("**Votre numéro de téléphone***", placeholder="Ex: 0612131415")
             
             with col2:
-                produit = st.selectbox("Produit à surveiller", df['Produit'].unique(), key="produit_alert")
-                seuil_baisse = st.slider("Seuil de baisse (%)", 1, 50, 10, key="seuil_baisse")
-                seuil_hausse = st.slider("Seuil de hausse (%)", 1, 50, 15, key="seuil_hausse")
-                niveau_stock = df.loc[df['Produit'] == produit, 'Stock'].values[0] if 'Stock' in df.columns else 0
-    
-            if st.button("💾 Enregistrer la configuration", key="save_alert_config"):
+                produit = st.selectbox("**Produit à surveiller**", df['Produit'].unique(), help="Sélectionnez le produit à surveiller")
+                seuil_baisse = st.slider("**Seuil de baisse (%)**", 1, 50, 10, help="Pourcentage de baisse qui déclenchera une alerte")
+                seuil_hausse = st.slider("**Seuil de hausse (%)**", 1, 50, 15, help="Pourcentage de hausse qui déclenchera une alerte")
+
+            # Récupérer le niveau de stock à partir des données
+            niveau_stock = df.loc[df['Produit'] == produit, 'Stock'].values[0] if 'Stock' in df.columns else 0
+            st.metric("**Stock actuel du produit**", niveau_stock)
+            
+            if st.button("💾 Enregistrer la configuration", key="save_config"):
                 if nom_utilisateur and email_utilisateur and phone_utilisateur:
-                    # Calcul des valeurs réelles
-                    df_product = df[df['Produit'] == produit].copy()
-                    df_product['Variation'] = df_product['Ventes'].pct_change() * 100
-                    
-                    dernieres_ventes = df_product['Ventes'].iloc[-1] if not df_product.empty else 0
-                    derniere_variation = df_product['Variation'].iloc[-1] if not df_product.empty else 0
-    
-                    new_config = {
-                        'Nom': nom_utilisateur,
-                        'Email': email_utilisateur,
-                        'Téléphone': phone_utilisateur,
-                        'Produit': produit,
-                        'Seuil Baisse': seuil_baisse,
-                        'Seuil Hausse': seuil_hausse,
-                        'Niveau de Stock': niveau_stock,
-                        'Ventes': dernieres_ventes,
-                        'Variation': derniere_variation,
-                        'Date Dernière Alerte': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+                    # Enregistrer les informations de l'utilisateur et les alertes dans un seul fichier Excel
+                    user_alert_data = {
+                        'Nom': [nom_utilisateur],
+                        'Email': [email_utilisateur],
+                        'Téléphone': [phone_utilisateur],
+                        'Produit': [produit],
+                        'Seuil Baisse': [seuil_baisse],
+                        'Seuil Hausse': [seuil_hausse],
+                        'Niveau de Stock': [niveau_stock],
+                        'Ventes': [0],
+                        'Variation': [0]
                     }
-    
-                    # Mise à jour de la configuration
-                    mask = (st.session_state.alertes_config['Email'] == email_utilisateur) | \
-                           (st.session_state.alertes_config['Téléphone'] == phone_utilisateur)
-                    
-                    if mask.any():
-                        st.session_state.alertes_config.loc[mask, list(new_config.keys())] = list(new_config.values())
-                    else:
-                        st.session_state.alertes_config = pd.concat([
-                            st.session_state.alertes_config, 
-                            pd.DataFrame([new_config])
-                        ], ignore_index=True)
-                    
-                    st.success("Configuration enregistrée avec succès!")
-                    
-                    # Option de téléchargement
-                    csv = st.session_state.alertes_config.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📥 Télécharger les configurations",
-                        data=csv,
-                        file_name="mes_configurations_alertes.csv",
-                        mime="text/csv"
-                    )
+                    append_to_excel(user_alert_data, 'alertes_utilisateur.xlsx')
+                    st.markdown('<div class="alert-success">Configuration des alertes enregistrée avec succès!</div>', unsafe_allow_html=True)
                 else:
-                    st.warning("Veuillez remplir tous les champs obligatoires (*)")
-    
-        # Section affichage des alertes
+                    st.markdown('<div class="alert-warning">Veuillez remplir tous les champs obligatoires (*)</div>', unsafe_allow_html=True)
+
         st.markdown("---")
-        st.subheader("📊 Tableau des Alertes Actives")
         
-        try:
-            if not st.session_state.alertes_config.empty:
-                alertes = []
-                
-                for _, config in st.session_state.alertes_config.iterrows():
-                    produit = config['Produit']
-                    df_product = df[df['Produit'] == produit].copy()
-                    
-                    if not df_product.empty:
-                        df_product['Variation'] = df_product['Ventes'].pct_change() * 100
-                        dernier = df_product.iloc[-1]
-                        
-                        alerte_baisse = dernier['Variation'] <= -config['Seuil Baisse']
-                        alerte_hausse = dernier['Variation'] >= config['Seuil Hausse']
-                        
-                        if alerte_baisse or alerte_hausse:
-                            alertes.append({
-                                'Produit': produit,
-                                'Dernières Ventes': dernier['Ventes'],
-                                'Variation (%)': dernier['Variation'],
-                                'Type Alerte': "⚠️ BAISSE" if alerte_baisse else "📈 HAUSSE",
-                                'Seuil Déclencheur': f"{config['Seuil Baisse']}%" if alerte_baisse else f"{config['Seuil Hausse']}%",
-                                'Date': dernier.name.strftime('%Y-%m-%d'),
-                                'Configuré par': config['Nom'],
-                                'Contact': config['Email']
-                            })
-    
-                if alertes:
-                    df_alertes = pd.DataFrame(alertes).sort_values('Variation (%)', ascending=True)
-                    
-                    # Mise en forme conditionnelle
-                    def style_alert(row):
-                        color = 'red' if "BAISSE" in row['Type Alerte'] else 'green'
-                        return [f'color: {color}; font-weight: bold'] * len(row)
-                    
-                    st.dataframe(
-                        df_alertes.style.apply(style_alert, axis=1),
-                        column_config={
-                            "Variation (%)": st.column_config.NumberColumn(format="%.2f %%"),
-                            "Dernières Ventes": st.column_config.NumberColumn(format="%.0f DH")
-                        },
-                        use_container_width=True,
-                        hide_index=True
-                    )
-                    
-                    # Export des alertes
-                    csv = df_alertes.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📤 Exporter les alertes (CSV)",
-                        data=csv,
-                        file_name="alertes_actives.csv",
-                        mime="text/csv"
-                    )
+        # Détection des alertes
+        st.subheader("🔍 Détection des Alertes en Temps Réel")
+        df_product = df[df['Produit'] == produit].copy()
+        df_product['Variation'] = df_product['Ventes'].pct_change() * 100
+        
+        # Alertes de variation
+        alertes_variation = df_product[
+            (df_product['Variation'] <= -seuil_baisse) | 
+            (df_product['Variation'] >= seuil_hausse)
+        ]
+        
+        # Affichage des alertes
+        if not alertes_variation.empty:
+            st.markdown(f'<div class="alert-warning">🚨 {len(alertes_variation)} alerte(s) de variation détectée(s)</div>', unsafe_allow_html=True)
+            
+            # Mise en forme conditionnelle du dataframe
+            def highlight_alerts(row):
+                if row['Variation'] <= -seuil_baisse:
+                    return ['background-color: #ffdddd'] * len(row)
                 else:
-                    st.success("✅ Aucune alerte détectée avec les configurations actuelles")
-            else:
-                st.info("ℹ️ Aucune configuration d'alerte enregistrée")
-                
-        except Exception as e:
-            st.error(f"Erreur lors de la génération des alertes: {str(e)}")
-                    
+                    return ['background-color: #ddffdd'] * len(row)
+            def highlight_alerts(row):
+                if row['Variation'] <= -seuil_baisse:
+                    return ['background-color: #ffdddd; color: #d63031'] * len(row)  # Texte rouge pour fond clair
+                else:
+                    return ['background-color: #ddffdd; color: #2e7d32'] * len(row)  # Texte vert pour fond clair
+
+            st.dataframe(
+                alertes_variation[['Produit', 'Ventes', 'Variation']].style.apply(highlight_alerts, axis=1),
+                column_config={
+                    "Ventes": st.column_config.NumberColumn(format="%.0f DH"),
+                    "Variation": st.column_config.NumberColumn(format="%.2f %%")
+                },
+                use_container_width=True
+            )
+            
+            # Mettre à jour les valeurs de ventes et variation
+            ventes_sum = alertes_variation['Ventes'].sum()
+            variation_sum = alertes_variation['Variation'].sum()
+            
+            # Enregistrer les alertes dans le même fichier avec les informations de l'utilisateur
+            alert_data = {
+                'Nom': [nom_utilisateur],
+                'Email': [email_utilisateur],
+                'Téléphone': [phone_utilisateur],
+                'Produit': [produit],
+                'Seuil Baisse': [seuil_baisse],
+                'Seuil Hausse': [seuil_hausse],
+                'Niveau de Stock': [niveau_stock],
+                'Ventes': [ventes_sum],
+                'Variation': [variation_sum]
+            }
+            append_to_excel(alert_data, 'alertes_utilisateur.xlsx')
+        
+        if alertes_variation.empty:
+            st.markdown('<div class="alert-success">✅ Aucune alerte détectée avec les paramètres actuels</div>', unsafe_allow_html=True)
 
     # Section Prédictions
     # Section Prédictions
