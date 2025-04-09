@@ -25,6 +25,41 @@ warnings.filterwarnings('ignore')
 SUPPORT_EMAIL = "Simohamedhadi05@example.com"  # Remplacer par votre email de support
 SUPPORT_PHONE = "+212766052983"  # Remplacer par votre numéro de téléphone de support
 
+GOOGLE_SHEET_ID = "16N2mNQ2Nrxfqb8X2A3ooNSwkmCMT8_wgIQEREFYwNyU"
+NOM_FEUILLE = "Sheet1"
+
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+def append_to_google_sheet(data, sheet_name, sheet_id):
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    
+    # Lire depuis les secrets
+    creds_dict = st.secrets["gcp_service_account"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    client = gspread.authorize(creds)
+    
+    sheet = client.open_by_key(sheet_id).worksheet(sheet_name)
+    row = [data[col] for col in data]
+    sheet.append_row(row)
+
+if st.button("📤 Enregistrer dans Google Sheet"):
+    ligne = {
+        "Nom": "Hadi",
+        "Email": "hadi@exemple.com",
+        "Téléphone": "0666666666",
+        "Produit": "Produit A",
+        "Seuil Baisse": 10,
+        "Seuil Hausse": 20
+    }
+    append_to_google_sheet(ligne, "Feuille1", "TON_ID_DU_SHEET")
+    st.success("✅ Données enregistrées avec succès !")
+
+
 def append_to_excel(data, filename='utilisateurs.xlsx'):
     """Ajoute des données à un fichier Excel existant ou crée un nouveau fichier."""
     new_df = pd.DataFrame(data)
