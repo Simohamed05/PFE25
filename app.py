@@ -25,6 +25,27 @@ warnings.filterwarnings('ignore')
 SUPPORT_EMAIL = "Simohamedhadi05@example.com"  # Remplacer par votre email de support
 SUPPORT_PHONE = "+212766052983"  # Remplacer par votre numéro de téléphone de support
 
+
+
+
+def append_to_excel(data, filename='utilisateurs.xlsx'):
+    """Ajoute des données à un fichier Excel existant ou crée un nouveau fichier."""
+    new_df = pd.DataFrame(data)
+    
+    if os.path.exists(filename):
+        existing_df = pd.read_excel(filename)
+        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+    else:
+        updated_df = new_df
+    
+    updated_df.to_excel(filename, index=False)
+
+# Configuration de la page
+st.set_page_config(
+    page_title="📊 Dashboard de Prévision des Ventes",
+    layout="wide",
+    page_icon="📈"
+)
 GOOGLE_SHEET_ID = "16N2mNQ2Nrxfqb8X2A3ooNSwkmCMT8_wgIQEREFYwNyU"
 NOM_FEUILLE = "Sheet1"
 
@@ -58,26 +79,7 @@ if st.button("📤 Enregistrer dans Google Sheet"):
     }
     append_to_google_sheet(ligne, "Feuille1", "TON_ID_DU_SHEET")
     st.success("✅ Données enregistrées avec succès !")
-
-
-def append_to_excel(data, filename='utilisateurs.xlsx'):
-    """Ajoute des données à un fichier Excel existant ou crée un nouveau fichier."""
-    new_df = pd.DataFrame(data)
     
-    if os.path.exists(filename):
-        existing_df = pd.read_excel(filename)
-        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
-    else:
-        updated_df = new_df
-    
-    updated_df.to_excel(filename, index=False)
-
-# Configuration de la page
-st.set_page_config(
-    page_title="📊 Dashboard de Prévision des Ventes",
-    layout="wide",
-    page_icon="📈"
-)
 def append_to_excel(data, filename='utilisateurs.xlsx'):
     """Ajoute des données à un fichier Excel existant ou crée un nouveau fichier."""
     new_df = pd.DataFrame(data)
