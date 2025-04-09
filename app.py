@@ -287,7 +287,9 @@ if uploaded_file:
     # Section Alertes
     elif option == "⚠️ Alertes":
         st.title("🚨 Système d'Alertes Intelligentes")
-        
+
+        ALERT_FILE = os.path.join(tempfile.gettempdir(), "alertes_utilisateurs.xlsx")
+
         # Section configuration des alertes
         with st.expander("🔧 Configuration des Alertes", expanded=True):
             col1, col2 = st.columns(2)
@@ -637,7 +639,9 @@ if uploaded_file:
     # Section Support client
     elif option == "📞 Support":
         st.title("🛠️ Support Technique")
-        
+
+        ALERT_FILE = os.path.join(tempfile.gettempdir(), "messages_support.xlsx")
+
         st.markdown(f"""
         <div style='background-color:#1A1D24; padding:20px; border-radius:10px;'>
             <h3 style='color:#4ECDC4;'>Contactez l'équipe de développement</h3>
