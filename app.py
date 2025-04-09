@@ -77,7 +77,7 @@ if st.button("📤 Enregistrer dans Google Sheet"):
         "Seuil Baisse": 10,
         "Seuil Hausse": 20
     }
-    append_to_google_sheet(ligne, "Feuille1", "TON_ID_DU_SHEET")
+    append_to_google_sheet(ligne, "Sheet1", "16N2mNQ2Nrxfqb8X2A3ooNSwkmCMT8_wgIQEREFYwNyU")
     st.success("✅ Données enregistrées avec succès !")
     
 def append_to_excel(data, filename='utilisateurs.xlsx'):
