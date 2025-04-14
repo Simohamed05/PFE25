@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from statsmodels.tsa.arima.model import ARIMA
 from prophet import Prophet
 from sklearn.ensemble import RandomForestRegressor
 import base64
@@ -22,8 +21,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Définir l'email et le téléphone de support
-SUPPORT_EMAIL = "Simohamedhadi05@example.com"  # Remplacer par votre email de support
-SUPPORT_PHONE = "+212766052983"  # Remplacer par votre numéro de téléphone de support
+SUPPORT_EMAIL = "Simohamedhadi05@gmail.com"  # Remplacer par votre email de support
+SUPPORT_PHONE = "+212 766052983"  # Remplacer par votre numéro de téléphone de support
 
 
 
@@ -46,54 +45,23 @@ st.set_page_config(
     layout="wide",
     page_icon="📈"
 )
-GOOGLE_SHEET_ID = "16N2mNQ2Nrxfqb8X2A3ooNSwkmCMT8_wgIQEREFYwNyU"
-NOM_FEUILLE = "Sheet1"
+uploaded_file = st.sidebar.file_uploader("📥 Chargez un fichier CSV", type=["csv"])
 
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-
-def append_to_google_sheet(data, sheet_name, sheet_id):
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    
-    # Lire depuis les secrets
-    creds_dict = st.secrets["gcp_service_account"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-    
-    sheet = client.open_by_key(sheet_id).worksheet(sheet_name)
-    row = [data[col] for col in data]
-    sheet.append_row(row)
-
-
-    
-def append_to_excel(data, filename='utilisateurs.xlsx'):
-    """Ajoute des données à un fichier Excel existant ou crée un nouveau fichier."""
-    new_df = pd.DataFrame(data)
-    
-    try:
-        if os.path.exists(filename):
-            existing_df = pd.read_excel(filename)
-            updated_df = pd.concat([existing_df, new_df], ignore_index=True)
-        else:
-            updated_df = new_df
-            
-        updated_df.to_excel(filename, index=False)
-    except PermissionError:
-        st.error("Erreur de permission : impossible d'accéder ou de créer le fichier.")
-    except Exception as e:
-        st.error(f"Erreur lors de l'écriture dans le fichier : {str(e)}")
-
-# Traitement des données
-uploaded_file = st.sidebar.file_uploader("📤 Chargez un fichier CSV", type=["csv"])
+# Chemin vers le fichier CSV de ventes historiques
+historical_data_file = 'ventes_historique.csv'
+st.sidebar.markdown("### 📥 Téléchargez le fichier pour le tester :")
+with open(historical_data_file, "rb") as f:
+    st.sidebar.download_button(
+        label="ventes_historique.csv",
+        data=f,
+        file_name='ventes_historique.csv',
+        mime='text/csv'
+    )
 
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file, sep=";")
-
+        
         # Vérification des colonnes obligatoires
         required_columns = ['Date', 'Ventes', 'Produit']
         missing_columns = [col for col in required_columns if col not in df.columns]
