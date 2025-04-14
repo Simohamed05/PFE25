@@ -68,17 +68,7 @@ def append_to_google_sheet(data, sheet_name, sheet_id):
     row = [data[col] for col in data]
     sheet.append_row(row)
 
-if st.button("📤 Enregistrer dans Google Sheet"):
-    ligne = {
-        "Nom": "Hadi",
-        "Email": "hadi@exemple.com",
-        "Téléphone": "0666666666",
-        "Produit": "Produit A",
-        "Seuil Baisse": 10,
-        "Seuil Hausse": 20
-    }
-    append_to_google_sheet(ligne, "Sheet1", "16N2mNQ2Nrxfqb8X2A3ooNSwkmCMT8_wgIQEREFYwNyU")
-    st.success("✅ Données enregistrées avec succès !")
+
     
 def append_to_excel(data, filename='utilisateurs.xlsx'):
     """Ajoute des données à un fichier Excel existant ou crée un nouveau fichier."""
@@ -164,7 +154,7 @@ if uploaded_file:
         with cols[1]:
             st.markdown("""
             **🔮 Prévisions Avancées**
-            - Modèles ARIMA/Prophet
+            - Modèle Prophet
             - Random Forest
             - Comparaison des modèles
             """)
