@@ -1,11 +1,23 @@
-streamlit
-pandas
-plotly
-statsmodels
-prophet
-scikit-learn
-openpyxl
-seaborn
-matplotlib
-gspread
-oauth2client
+# Core
+streamlit==1.32.2
+pandas==2.1.4
+numpy==1.26.3
+
+# Visualisation
+plotly==5.18.0
+seaborn==0.13.1
+matplotlib==3.8.2
+
+# Modèles de prévision
+prophet==1.1.5
+statsmodels==0.14.1
+scikit-learn==1.3.2
+xgboost==2.0.3
+
+# Support Excel
+openpyxl==3.1.2
+
+# Intégration Google Sheets
+
+# Utilitaires
+python-dotenv==1.0.0
