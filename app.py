@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from prophet import Prophet
@@ -16,6 +17,11 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import re
 import warnings
+from sklearn.ensemble import RandomForestRegressor
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from sklearn.linear_model import LinearRegression
+
 
 # Suppression des avertissements
 warnings.filterwarnings('ignore')
@@ -45,6 +51,8 @@ st.set_page_config(
     layout="wide",
     page_icon="📈"
 )
+
+
 uploaded_file = st.sidebar.file_uploader("📥 Chargez un fichier CSV", type=["csv"])
 
 # Chemin vers le fichier CSV de ventes historiques
@@ -57,6 +65,56 @@ with open(historical_data_file, "rb") as f:
         file_name='ventes_historique.csv',
         mime='text/csv'
     )
+def predict_with_prophet(df, horizon):
+    from prophet import Prophet
+    prophet_df = df.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
+    model = Prophet(daily_seasonality=True)
+    model.fit(prophet_df)
+    future = model.make_future_dataframe(periods=horizon)
+    forecast = model.predict(future)
+    forecast_df = forecast[['ds', 'yhat']].rename(columns={'ds': 'Date', 'yhat': 'Prévision'})
+    return forecast_df
+
+
+def predict_with_random_forest(df, horizon):
+    from sklearn.ensemble import RandomForestRegressor
+    df = df.reset_index()
+    df['Jour'] = df['Date'].dt.day
+    df['Mois'] = df['Date'].dt.month
+    df['JourSemaine'] = df['Date'].dt.dayofweek
+    X = df[['Jour', 'Mois', 'JourSemaine']]
+    y = df['Ventes']
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    future_dates = pd.date_range(start=df['Date'].iloc[-1], periods=horizon+1, freq='D')[1:]
+    future_X = pd.DataFrame({
+        'Jour': future_dates.day,
+        'Mois': future_dates.month,
+        'JourSemaine': future_dates.dayofweek
+    })
+    forecast = model.predict(future_X)
+    forecast_df = pd.DataFrame({'Date': future_dates, 'Prévision': forecast})
+    return forecast_df
+
+def predict_with_xgboost(df, horizon):
+    from xgboost import XGBRegressor
+    df = df.reset_index()
+    df['Jour'] = df['Date'].dt.day
+    df['Mois'] = df['Date'].dt.month
+    df['JourSemaine'] = df['Date'].dt.dayofweek
+    X = df[['Jour', 'Mois', 'JourSemaine']]
+    y = df['Ventes']
+    model = XGBRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    future_dates = pd.date_range(start=df['Date'].iloc[-1], periods=horizon+1, freq='D')[1:]
+    future_X = pd.DataFrame({
+        'Jour': future_dates.day,
+        'Mois': future_dates.month,
+        'JourSemaine': future_dates.dayofweek
+    })
+    forecast = model.predict(future_X)
+    forecast_df = pd.DataFrame({'Date': future_dates, 'Prévision': forecast})
+    return forecast_df
 
 if uploaded_file:
     try:
@@ -429,93 +487,243 @@ if uploaded_file:
 
     # Section Prédictions
     # Section Prédictions
+        
     elif option == "🚀 Prédictions":
         st.title("🚀 Prédictions des Ventes")
+        
+        # Vérification des données
+        if 'Produit' not in df.columns or 'Ventes' not in df.columns:
+            st.error("Colonnes requises manquantes : 'Produit' et 'Ventes' doivent être présents")
+            st.stop()
+        
+        # Conversion de l'index en DatetimeIndex si ce n'est pas déjà le cas
+        if not isinstance(df.index, pd.DatetimeIndex):
+            try:
+                df = df.set_index('Date')  # Essaye de définir 'Date' comme index
+                df.index = pd.to_datetime(df.index)
+            except:
+                st.error("L'index doit être une colonne de dates nommée 'Date'")
+                st.stop()
         
         col1, col2 = st.columns(2)
         with col1:
             produit = st.selectbox("Sélectionnez un produit", df['Produit'].unique())
         with col2:
-            model_type = st.selectbox("Modèle de prévision", ["Prophet", "Random Forest"])
+            model_type = st.selectbox("Modèle de prévision", [
+                "Auto",
+                "Prophet",
+                "Random Forest",
+                "XGBoost"
+            ])
+        # Définitions des modèles
+        model_definitions = {
+            "Auto": "🔍 Sélectionne automatiquement le meilleur modèle (Prophet, Random Forest ou XGBoost) en comparant leurs performances sur les données historiques.",
+            "Prophet": "📅 Modèle de séries temporelles développé par Facebook, idéal pour les données avec tendances et saisonnalités. Gère automatiquement les effets saisonniers et les jours fériés.",
+            "Random Forest": "🌳 Méthode d'ensemble basée sur des arbres de décision. Robustes aux outliers et capture bien les relations non-linéaires. Parfait pour les données complexes.",
+            "XGBoost": "⚡ Algorithme de boosting avancé, souvent plus précis que Random Forest pour les séries temporelles. Excellente performance avec des données structurées."
+        }
         
-        df_product = df[df['Produit'] == produit][['Ventes']]
+        # Afficher la définition du modèle sélectionné
+        st.markdown(f"**{model_type}** : {model_definitions[model_type]}")
         
-        # Paramètres des modèles
-        with st.expander("⚙️ Paramètres avancés"):
-            
-            # Modification ici pour permettre jusqu'à 365 jours
-            horizon = st.slider("Horizon de prévision (jours)", 7, 365, 30)
+        df_product = df[df['Produit'] == produit][['Ventes']].copy()
+        
+        # Paramètre principal
+        horizon = st.slider("Horizon de prévision (jours)", 7, 365, 30)
+        df_product = df[df['Produit'] == produit][['Ventes']].copy()
+        
+        # Vérification des données manquantes
+        if df_product['Ventes'].isnull().sum() > 0:
+            st.warning("Valeurs manquantes détectées, interpolation linéaire appliquée")
+            df_product['Ventes'] = df_product['Ventes'].interpolate()
+        
         
         if st.button("🔮 Lancer la Prévision"):
-            with st.spinner("Calcul des prévisions en cours..."):
+            with st.spinner(f"Calcul des prévisions avec {model_type}..."):
                 try:
-                    if model_type == "Prophet":
+                    # Mode Auto - Sélection automatique du meilleur modèle
+                    if model_type == "Auto":
+                        from sklearn.metrics import mean_squared_error
+                        from xgboost import XGBRegressor
+                        from sklearn.ensemble import RandomForestRegressor
+                        from prophet import Prophet
+                        
+                        # Préparation des données
+                        df_product_auto = df_product.asfreq('D').ffill()
+                        split_index = int(len(df_product_auto) * 0.8)
+                        train = df_product_auto.iloc[:split_index]
+                        test = df_product_auto.iloc[split_index:]
+                        
+                        results = {}
+                        forecasts = {}
+                        
+                        # Test XGBoost
+                        try:
+                            train_xgb = train.reset_index()
+                            train_xgb['Jour'] = train_xgb['Date'].dt.day
+                            train_xgb['Mois'] = train_xgb['Date'].dt.month
+                            train_xgb['JourSemaine'] = train_xgb['Date'].dt.dayofweek
+                            X_train = train_xgb[['Jour', 'Mois', 'JourSemaine']]
+                            y_train = train_xgb['Ventes']
+                            
+                            test_xgb = test.reset_index()
+                            X_test = test_xgb[['Jour', 'Mois', 'JourSemaine']]
+                            y_test = test_xgb['Ventes']
+                            
+                            xgb_model = XGBRegressor(random_state=42)
+                            xgb_model.fit(X_train, y_train)
+                            xgb_pred = xgb_model.predict(X_test)
+                            results["XGBoost"] = mean_squared_error(y_test, xgb_pred, squared=False)
+                            
+                            future_dates = pd.date_range(start=df_product_auto.index[-1], periods=horizon+1, freq='D')[1:]
+                            future_X = pd.DataFrame({
+                                'Jour': future_dates.day,
+                                'Mois': future_dates.month,
+                                'JourSemaine': future_dates.dayofweek
+                            })
+                            forecasts["XGBoost"] = xgb_model.predict(future_X)
+                        except Exception as e:
+                            results["XGBoost"] = float('inf')
+                        
+                        # Test Random Forest
+                        try:
+                            rf_model = RandomForestRegressor(random_state=42)
+                            rf_model.fit(X_train, y_train)
+                            rf_pred = rf_model.predict(X_test)
+                            results["Random Forest"] = mean_squared_error(y_test, rf_pred, squared=False)
+                            forecasts["Random Forest"] = rf_model.predict(future_X)
+                        except Exception as e:
+                            results["Random Forest"] = float('inf')
+                        
+                        # Test Prophet
+                        try:
+                            prophet_train = train.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
+                            prophet_model = Prophet(daily_seasonality=True)
+                            prophet_model.fit(prophet_train)
+                            
+                            future = prophet_model.make_future_dataframe(periods=len(test)+horizon)
+                            forecast = prophet_model.predict(future)
+                            
+                            prophet_test_pred = forecast.iloc[split_index:split_index+len(test)]['yhat'].values
+                            results["Prophet"] = mean_squared_error(test['Ventes'].values, prophet_test_pred, squared=False)
+                            
+                            forecasts["Prophet"] = forecast.iloc[-horizon:]['yhat'].values
+                        except Exception as e:
+                            results["Prophet"] = float('inf')
+                        
+                        # Sélection du meilleur modèle
+                        best_model = min(results, key=results.get)
+                        st.success(f"Meilleur modèle sélectionné : {best_model} (RMSE: {results[best_model]:.2f})")
+                        
+                        future_dates = pd.date_range(start=df_product_auto.index[-1], periods=horizon+1, freq='D')[1:]
+                        forecast_df = pd.DataFrame({
+                            'Date': future_dates,
+                            'Prévision': forecasts[best_model]
+                        })
+                    
+                    # Prophet
+                    elif model_type == "Prophet":
                         prophet_df = df_product.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
-                        model = Prophet()
+                        model = Prophet(daily_seasonality=True)
                         model.fit(prophet_df)
                         future = model.make_future_dataframe(periods=horizon)
                         forecast = model.predict(future)
                         forecast_df = forecast[['ds', 'yhat']].rename(columns={'ds': 'Date', 'yhat': 'Prévision'})
-                        forecast_df = forecast_df[forecast_df['Date'] > df_product.index[-1]]
+                        forecast_df = forecast_df.tail(horizon)
                     
+                    # Random Forest
                     elif model_type == "Random Forest":
-                        df_product = df_product.reset_index()
-                        df_product['Jour'] = df_product['Date'].dt.day
-                        df_product['Mois'] = df_product['Date'].dt.month
-                        df_product['Année'] = df_product['Date'].dt.year
-                        df_product['JourSemaine'] = df_product['Date'].dt.dayofweek
+                        from sklearn.ensemble import RandomForestRegressor
                         
-                        X = df_product[['Jour', 'Mois', 'Année', 'JourSemaine']]
-                        y = df_product['Ventes']
+                        df_features = df_product.reset_index()
+                        df_features['Jour'] = df_features['Date'].dt.day
+                        df_features['Mois'] = df_features['Date'].dt.month
+                        df_features['JourSemaine'] = df_features['Date'].dt.dayofweek
+                        df_features['Trimestre'] = df_features['Date'].dt.quarter
+                        
+                        X = df_features[['Jour', 'Mois', 'JourSemaine', 'Trimestre']]
+                        y = df_features['Ventes']
                         
                         model = RandomForestRegressor(n_estimators=100, random_state=42)
                         model.fit(X, y)
                         
-                        future_dates = pd.date_range(start=df_product['Date'].iloc[-1], periods=horizon+1, freq='D')[1:]
+                        future_dates = pd.date_range(start=df_features['Date'].iloc[-1], periods=horizon+1, freq='D')[1:]
                         future_X = pd.DataFrame({
                             'Jour': future_dates.day,
                             'Mois': future_dates.month,
-                            'Année': future_dates.year,
-                            'JourSemaine': future_dates.dayofweek
+                            'JourSemaine': future_dates.dayofweek,
+                            'Trimestre': future_dates.quarter
                         })
                         
                         forecast = model.predict(future_X)
-                        forecast_df = pd.DataFrame({
-                            'Date': future_dates,
-                            'Prévision': forecast
+                        forecast_df = pd.DataFrame({'Date': future_dates, 'Prévision': forecast})
+                    
+                    # XGBoost
+                    elif model_type == "XGBoost":
+                        from xgboost import XGBRegressor
+                        
+                        df_features = df_product.reset_index()
+                        df_features['Jour'] = df_features['Date'].dt.day
+                        df_features['Mois'] = df_features['Date'].dt.month
+                        df_features['JourSemaine'] = df_features['Date'].dt.dayofweek
+                        df_features['Trimestre'] = df_features['Date'].dt.quarter
+                        
+                        X = df_features[['Jour', 'Mois', 'JourSemaine', 'Trimestre']]
+                        y = df_features['Ventes']
+                        
+                        model = XGBRegressor(random_state=42)
+                        model.fit(X, y)
+                        
+                        future_dates = pd.date_range(start=df_features['Date'].iloc[-1], periods=horizon+1, freq='D')[1:]
+                        future_X = pd.DataFrame({
+                            'Jour': future_dates.day,
+                            'Mois': future_dates.month,
+                            'JourSemaine': future_dates.dayofweek,
+                            'Trimestre': future_dates.quarter
                         })
+                        
+                        forecast = model.predict(future_X)
+                        forecast_df = pd.DataFrame({'Date': future_dates, 'Prévision': forecast})
                     
                     # Affichage des résultats
-                    st.success("Prévisions calculées avec succès!")
+                    st.success("Prévisions terminées avec succès!")
                     
-                    # Graphique des prévisions
+                    # Graphique
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
-                        x=df_product.index if model_type != 'Random Forest' else df_product['Date'],
-                        y=df_product['Ventes'],
-                        mode='lines',
-                        name='Ventes Réelles',
-                        line=dict(color='#4ECDC4')
+                    x=df_product.index,
+                    y=df_product['Ventes'],
+                    mode='lines',
+                    name='Historique',
+                    line=dict(color='#1f77b4', width=2)  # Bleu
                     ))
                     
+                    # Prévisions en ROUGE (#d62728 est le rouge standard de Plotly)
                     fig.add_trace(go.Scatter(
                         x=forecast_df['Date'],
                         y=forecast_df['Prévision'],
-                        mode='lines',
+                        mode='lines+markers',
                         name='Prévisions',
-                        line=dict(color='#FF6B6B', dash='dot')
+                        line=dict(color='#d62728', width=2, dash='dot')  # Rouge
                     ))
                     
                     fig.update_layout(
                         title=f"Prévisions des ventes pour {produit} ({model_type})",
                         xaxis_title='Date',
                         yaxis_title='Ventes',
-                        hovermode='x unified'
+                        hovermode='x unified',
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1
+                        )
                     )
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Téléchargement des prévisions
+                    # Téléchargement
                     csv = forecast_df.to_csv(index=False).encode('utf-8')
                     st.download_button(
                         label="💾 Télécharger les prévisions (CSV)",
@@ -526,7 +734,11 @@ if uploaded_file:
                 
                 except Exception as e:
                     st.error(f"Erreur lors de la prévision : {str(e)}")
-
+                    st.error("Veuillez vérifier :")
+                    st.error("- Que vos données contiennent bien des dates valides")
+                    st.error("- Qu'il n'y a pas de valeurs manquantes")
+                    st.error("- Que vous avez suffisamment de données historiques")
+    ### Téléchargement d'un Exemple
      # Section Données brutes
     elif option == "📂 Données Brutes":
         st.title("📂 Données Brutes")
@@ -714,6 +926,35 @@ if uploaded_file:
                     st.warning("Veuillez remplir tous les champs obligatoires (*)")
 
 else:
-    st.info("ℹ️ Veuillez charger un fichier CSV pour commencer l'analyse")
+    st.title("📊 Dashboard Intelligent de Prévision des Ventes")
+    
+    # Attention: Structure des Données à Importer
+    st.header("⚠️ Attention: Structure des Données")
+    st.markdown("""
+    Avant d'importer vos données, veuillez vous assurer que votre fichier respecte la structure suivante :
 
-                           
+    ### Exigences de Données
+    - **Colonnes Obligatoires :**
+      - `Date` : Format JJ/MM/AAAA
+      - `Ventes` : Valeurs numériques (ex. : 1500)
+      - `Produit` : Noms des produits (ex. : "Produit_A")
+
+    - **Colonnes Optionnelles :**
+      - `Region` : (ex. : "Région_1")
+      - `Promo` : (ex. : "Oui" ou "Non")
+      - `Stock` : Niveaux de stock (ex. : 50)
+      - `Satisfaction` : Indice de satisfaction client (ex. : 4.5)
+
+    ### Exemple de Données
+    | Date       | Ventes | Produit    | Region    | Promo | Stock |
+    |------------|--------|------------|-----------|-------|-------|
+    | 01/01/2023 | 1500   | Produit_A  | Région_1  | Oui   | 50    |
+    | 02/01/2023 | 1200   | Produit_B  | Région_2  | Non   | 30    |
+
+    ### Instructions
+    - Assurez-vous que les colonnes obligatoires sont présentes.
+    - Vérifiez que les dates sont au bon format.
+    - Évitez les valeurs manquantes dans les colonnes obligatoires.
+
+    """)
+
