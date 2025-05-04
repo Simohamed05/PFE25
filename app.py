@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import seaborn as sns
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import smtplib
+from email.message import EmailMessage
 import re
 import warnings
 from sklearn.ensemble import RandomForestRegressor
@@ -25,11 +25,14 @@ from sklearn.linear_model import LinearRegression
 
 # Suppression des avertissements
 warnings.filterwarnings('ignore')
-
-# Définir l'email et le téléphone de support
-SUPPORT_EMAIL = "Simohamedhadi05@gmail.com"  # Remplacer par votre email de support
+SUPPORT_EMAIL = "simohamedhadi05@gmail.com"  # Remplacer par votre email de support
 SUPPORT_PHONE = "+212 766052983"  # Remplacer par votre numéro de téléphone de support
 
+# Configuration SMTP (à configurer avec vos identifiants)
+SMTP_SERVER = "smtp.gmail.com"  # Par exemple, pour Gmail
+SMTP_PORT = 587
+SMTP_USERNAME = SUPPORT_EMAIL  # Votre email
+SMTP_PASSWORD = "jmoycgjedfqwulkg"  # Mot de passe ou mot de passe d'application
 
 
 
@@ -38,13 +41,31 @@ def append_to_excel(data, filename='utilisateurs.xlsx'):
     new_df = pd.DataFrame(data)
     
     if os.path.exists(filename):
-        existing_df = pd.read_excel(filename)
-        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+        try:
+            existing_df = pd.read_excel(filename)
+            updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+        except Exception as e:
+            st.warning(f"Erreur lors de la lecture de {filename}: {str(e)}. Création d'un nouveau fichier.")
+            updated_df = new_df
     else:
         updated_df = new_df
     
     updated_df.to_excel(filename, index=False)
-
+    
+def define_alert_message(row, nom_utilisateur, produit, seuil_baisse, seuil_hausse):
+    message = f"""
+    Alerte de Ventes pour {produit}
+    Nom: {nom_utilisateur}
+    Date: {row.name.strftime('%d/%m/%Y')}
+    Produit: {produit}
+    Ventes: {row['Ventes']:.0f} DH
+    Variation: {row['Variation']:.2f}%
+    """
+    if row['Variation'] <= -seuil_baisse:
+        message += f"⚠️ Baisse significative détectée (seuil: {seuil_baisse}%)"
+    elif row['Variation'] >= seuil_hausse:
+        message += f"🚀 Hausse significative détectée (seuil: {seuil_hausse}%)"
+    return message
 # Configuration de la page
 st.set_page_config(
     page_title="📊 Dashboard de Prévision des Ventes",
@@ -338,8 +359,9 @@ if uploaded_file:
 
     # Section Alertes
     # Section Alertes
+        # Section Alertes
+        # Section Alertes
     elif option == "⚠️ Alertes":
-    # Style CSS personnalisé
         st.markdown("""
         <style>
         .alert-title {
@@ -355,21 +377,21 @@ if uploaded_file:
             padding: 15px;
             margin-bottom: 20px;
             border-left: 4px solid #d63031;
-            color: #333;  /* Couleur de texte pour fond clair */
+            color: #333;
         }
         .alert-success {
             background-color: #e8f5e9;
             border-radius: 8px;
             padding: 15px;
             border-left: 4px solid #2e7d32;
-            color: #2e7d32;  /* Couleur de texte pour fond vert clair */
+            color: #2e7d32;
         }
         .alert-warning {
             background-color: #fff3e0;
             border-radius: 8px;
             padding: 15px;
             border-left: 4px solid #ff6d00;
-            color: #ff6d00;  /* Couleur de texte pour fond orange clair */
+            color: #ff6d00;
         }
         .stButton>button {
             background-color: #d63031;
@@ -382,34 +404,28 @@ if uploaded_file:
             transform: scale(1.02);
         }
         </style>
-
         """, unsafe_allow_html=True)
 
         st.markdown('<div class="alert-title">🚨 Système d\'Alertes Intelligentes</div>', unsafe_allow_html=True)
-        
-        # Formulaire pour entrer les informations de l'utilisateur
         with st.expander("🔧 Configuration des Alertes", expanded=True):
             st.markdown('<div class="alert-section">Veuillez entrer vos informations pour configurer les alertes</div>', unsafe_allow_html=True)
-            
             col1, col2 = st.columns(2)
-            
             with col1:
                 nom_utilisateur = st.text_input("**Votre nom complet***", placeholder="Ex: HADI Mohamed")
                 email_utilisateur = st.text_input("**Votre email***", placeholder="Ex: hadi@exemple.com")
                 phone_utilisateur = st.text_input("**Votre numéro de téléphone***", placeholder="Ex: 0612131415")
-            
             with col2:
                 produit = st.selectbox("**Produit à surveiller**", df['Produit'].unique(), help="Sélectionnez le produit à surveiller")
                 seuil_baisse = st.slider("**Seuil de baisse (%)**", 1, 50, 10, help="Pourcentage de baisse qui déclenchera une alerte")
                 seuil_hausse = st.slider("**Seuil de hausse (%)**", 1, 50, 15, help="Pourcentage de hausse qui déclenchera une alerte")
-
-            # Récupérer le niveau de stock à partir des données
-            niveau_stock = df.loc[df['Produit'] == produit, 'Stock'].values[0] if 'Stock' in df.columns else 0
-            st.metric("**Stock actuel du produit**", niveau_stock)
-            
+            try:
+                niveau_stock = df.loc[df['Produit'] == produit, 'Stock'].values[0] if 'Stock' in df.columns else 0
+                st.metric("**Stock actuel du produit**", niveau_stock)
+            except IndexError:
+                niveau_stock = 0
+                st.warning("Aucune donnée de stock disponible pour ce produit.")
             if st.button("💾 Enregistrer la configuration", key="save_config"):
                 if nom_utilisateur and email_utilisateur and phone_utilisateur:
-                    # Enregistrer les informations de l'utilisateur et les alertes dans un seul fichier Excel
                     user_alert_data = {
                         'Nom': [nom_utilisateur],
                         'Email': [email_utilisateur],
@@ -423,38 +439,51 @@ if uploaded_file:
                     }
                     append_to_excel(user_alert_data, 'alertes_utilisateur.xlsx')
                     st.markdown('<div class="alert-success">Configuration des alertes enregistrée avec succès!</div>', unsafe_allow_html=True)
+                    try:
+                        msg = EmailMessage()
+                        msg.set_content(f"""
+                        Confirmation de Configuration d'Alerte
+                        Nom: {nom_utilisateur}
+                        Email: {email_utilisateur}
+                        Téléphone: {phone_utilisateur}
+                        Produit surveillé: {produit}
+                        Seuil de baisse: {seuil_baisse}%
+                        Seuil de hausse: {seuil_hausse}%
+                        Stock actuel: {niveau_stock}
+                        
+                        """)
+                        msg['Subject'] = f"Confirmation de Configuration d'Alerte - {nom_utilisateur}"
+                        msg['From'] = SUPPORT_EMAIL
+                        msg['To'] = email_utilisateur
+                        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                            server.starttls()
+                            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                            server.send_message(msg)
+                        st.markdown('<div class="alert-success">Email de confirmation envoyé!</div>', unsafe_allow_html=True)
+                    except Exception as e:
+                        st.markdown(f'<div class="alert-warning">Erreur lors de l\'envoi de l\'email de confirmation: {str(e)}</div>', unsafe_allow_html=True)
                 else:
                     st.markdown('<div class="alert-warning">Veuillez remplir tous les champs obligatoires (*)</div>', unsafe_allow_html=True)
-
         st.markdown("---")
-        
-        # Détection des alertes
         st.subheader("🔍 Détection des Alertes en Temps Réel")
         df_product = df[df['Produit'] == produit].copy()
         df_product['Variation'] = df_product['Ventes'].pct_change() * 100
-        
-        # Alertes de variation
         alertes_variation = df_product[
-            (df_product['Variation'] <= -seuil_baisse) | 
+            (df_product['Variation'] <= -seuil_baisse) |
             (df_product['Variation'] >= seuil_hausse)
         ]
-        
-        # Affichage des alertes
+
+        # Initialiser la session state pour suivre la dernière alerte envoyée
+        if 'last_sent_alert_index' not in st.session_state:
+            st.session_state.last_sent_alert_index = None
+
         if not alertes_variation.empty:
             st.markdown(f'<div class="alert-warning">🚨 {len(alertes_variation)} alerte(s) de variation détectée(s)</div>', unsafe_allow_html=True)
-            
-            # Mise en forme conditionnelle du dataframe
             def highlight_alerts(row):
                 if row['Variation'] <= -seuil_baisse:
-                    return ['background-color: #ffdddd'] * len(row)
+                    return ['background-color: #ffdddd; color: #d63031'] * len(row)
                 else:
-                    return ['background-color: #ddffdd'] * len(row)
-            def highlight_alerts(row):
-                if row['Variation'] <= -seuil_baisse:
-                    return ['background-color: #ffdddd; color: #d63031'] * len(row)  # Texte rouge pour fond clair
-                else:
-                    return ['background-color: #ddffdd; color: #2e7d32'] * len(row)  # Texte vert pour fond clair
-
+                    return ['background-color: #ddffdd; color: #2e7d32'] * len(row)
             st.dataframe(
                 alertes_variation[['Produit', 'Ventes', 'Variation']].style.apply(highlight_alerts, axis=1),
                 column_config={
@@ -463,12 +492,8 @@ if uploaded_file:
                 },
                 use_container_width=True
             )
-            
-            # Mettre à jour les valeurs de ventes et variation
             ventes_sum = alertes_variation['Ventes'].sum()
             variation_sum = alertes_variation['Variation'].sum()
-            
-            # Enregistrer les alertes dans le même fichier avec les informations de l'utilisateur
             alert_data = {
                 'Nom': [nom_utilisateur],
                 'Email': [email_utilisateur],
@@ -481,12 +506,26 @@ if uploaded_file:
                 'Variation': [variation_sum]
             }
             append_to_excel(alert_data, 'alertes_utilisateur.xlsx')
-        
-        if alertes_variation.empty:
+            # Prendre uniquement la dernière alerte
+            latest_alert = alertes_variation.iloc[-1]
+            latest_alert_index = latest_alert.name
+            if st.session_state.last_sent_alert_index != latest_alert_index:
+                try:
+                    msg = EmailMessage()
+                    msg.set_content(define_alert_message(latest_alert, nom_utilisateur, produit, seuil_baisse, seuil_hausse))
+                    msg['Subject'] = f"Alerte de Ventes pour {produit} - {nom_utilisateur}"
+                    msg['From'] = SUPPORT_EMAIL
+                    msg['To'] = email_utilisateur
+                    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                        server.starttls()
+                        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                        server.send_message(msg)
+                    st.session_state.last_sent_alert_index = latest_alert_index  # Mettre à jour la dernière alerte envoyée
+                    st.markdown('<div class="alert-success">Email d\'alerte envoyé avec succès!</div>', unsafe_allow_html=True)
+                except Exception as e:
+                    st.markdown(f'<div class="alert-warning">Erreur lors de l\'envoi de l\'email d\'alerte: {str(e)}</div>', unsafe_allow_html=True)
+        else:
             st.markdown('<div class="alert-success">✅ Aucune alerte détectée avec les paramètres actuels</div>', unsafe_allow_html=True)
-
-    # Section Prédictions
-    # Section Prédictions
         
     elif option == "🚀 Prédictions":
         st.title("🚀 Prédictions des Ventes")
@@ -894,25 +933,24 @@ if uploaded_file:
             if st.form_submit_button("📤 Envoyer le message"):
                 if nom and email and message:
                     try:
-                        # Création du message
-                        msg = MIMEMultipart()
-                        msg['From'] = SUPPORT_EMAIL  # Use the support email for sending
-                        msg['To'] = SUPPORT_EMAIL
-                        msg['Subject'] = f"Support Dashboard - Message de {nom}"
-                        
-                        body = f"""
+                        # Création du message avec EmailMessage
+                        msg = EmailMessage()
+                        msg.set_content(f"""
                         Nom: {nom}
                         Email: {email}
                         Message: 
                         {message}
-                        """
-                        msg.attach(MIMEText(body, 'plain'))
+                        """)
                         
-                        # Envoi réel (à décommenter avec vos identifiants)
-                        # with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-                        #     server.starttls()
-                        #     server.login(SMTP_USERNAME, SMTP_PASSWORD)
-                        #     server.send_message(msg)
+                        msg['Subject'] = f"Support Dashboard - Message de {nom}"
+                        msg['From'] = SUPPORT_EMAIL
+                        msg['To'] = SUPPORT_EMAIL
+                        
+                        # Envoi de l'email
+                        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                            server.starttls()
+                            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                            server.send_message(msg)
                         
                         # Enregistrer le message dans Excel
                         message_data = {'Nom': [nom], 'Email': [email], 'Message': [message]}
@@ -922,9 +960,8 @@ if uploaded_file:
                         st.balloons()
                     except Exception as e:
                         st.error(f"Erreur d'envoi: {str(e)}")
-                else:
-                    st.warning("Veuillez remplir tous les champs obligatoires (*)")
-
+            else:
+                st.warning("Veuillez remplir tous les champs obligatoires (*)")
 else:
     st.title("📊 Dashboard Intelligent de Prévision des Ventes")
     
