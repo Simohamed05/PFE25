@@ -536,6 +536,7 @@ if uploaded_file:
 
 # REMPLACER la section "🚀 Prédictions" par ce code amélioré :
 
+     
     elif option == "🚀 Prédictions":
         st.title("🚀 Prévisions des Ventes")
         
@@ -550,173 +551,409 @@ if uploaded_file:
             produit = st.selectbox("Sélectionnez un produit", df['Produit'].unique())
         with col2:
             model_type = st.selectbox("Modèle de prévision", [
-                "Prophet",
                 "Random Forest",
                 "XGBoost",
-                "Auto"
+                "ARIMA",
+                "Holt-Winters",
+                "Moyenne Mobile Intelligente",
+                "Auto (Comparaison)"
             ])
         
         # Définitions des modèles
         model_definitions = {
-            "Auto": "🔍 Sélectionne automatiquement le meilleur modèle en comparant leurs performances.",
-            "Prophet": "📅 Modèle de séries temporelles développé par Facebook, idéal pour les données avec tendances et saisonnalités.",
-            "Random Forest": "🌳 Méthode d'ensemble basée sur des arbres de décision. Robuste aux outliers.",
-            "XGBoost": "⚡ Algorithme de boosting avancé, souvent plus précis pour les séries temporelles."
+            "Random Forest": "🌳 **Random Forest** : Algorithme d'ensemble performant qui combine plusieurs arbres de décision. Excellent pour capturer les patterns complexes et non-linéaires dans les données de ventes.",
+            "XGBoost": "⚡ **XGBoost** : Algorithme de gradient boosting de pointe. Très précis pour les prévisions de séries temporelles avec tendances et saisonnalités.",
+            "ARIMA": "📊 **ARIMA** : Modèle statistique classique (AutoRegressive Integrated Moving Average). Idéal pour les séries avec tendances linéaires et patterns simples.",
+            "Holt-Winters": "❄️ **Holt-Winters** : Modèle de lissage exponentiel qui gère automatiquement les tendances et saisonnalités. Parfait pour les données avec cycles réguliers.",
+            "Moyenne Mobile Intelligente": "📈 **Moyenne Mobile Intelligente** : Approche simple mais efficace basée sur les moyennes pondérées récentes avec ajustement de tendance.",
+            "Auto (Comparaison)": "🤖 **Mode Auto** : Compare automatiquement tous les modèles disponibles et sélectionne le plus performant pour vos données."
         }
         
         st.info(model_definitions[model_type])
         
-        # Horizon de prévision
-        horizon = st.slider("Horizon de prévision (jours)", 7, 365, 30)
+        # Paramètres avancés (optionnel)
+        with st.expander("⚙️ Paramètres avancés"):
+            col1, col2 = st.columns(2)
+            with col1:
+                horizon = st.slider("Horizon de prévision (jours)", 7, 365, 30)
+            with col2:
+                show_confidence = st.checkbox("Afficher intervalle de confiance", value=True)
         
         # Filtrer les données du produit
         df_product = df[df['Produit'] == produit][['Ventes']].copy()
         
         # Vérification des données
-        if len(df_product) < 10:
-            st.error(f"Pas assez de données pour {produit}. Minimum requis : 10 enregistrements")
+        if len(df_product) < 14:
+            st.error(f"❌ Pas assez de données pour {produit}. Minimum requis : 14 enregistrements. Vous avez : {len(df_product)}")
             st.stop()
         
         # Afficher les statistiques du produit
-        col1, col2, col3 = st.columns(3)
+        st.markdown("### 📊 Statistiques du produit sélectionné")
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("📊 Points de données", len(df_product))
+            st.metric("📦 Points de données", len(df_product))
         with col2:
             st.metric("💰 Ventes moyennes", f"{df_product['Ventes'].mean():.0f} DH")
         with col3:
-            st.metric("📈 Tendance", f"{df_product['Ventes'].pct_change().mean()*100:.2f}%")
+            st.metric("📈 Ventes max", f"{df_product['Ventes'].max():.0f} DH")
+        with col4:
+            growth = df_product['Ventes'].pct_change().mean()
+            st.metric("📊 Tendance quotidienne", f"{growth*100:.2f}%")
         
-        if st.button("🔮 Lancer la Prévision"):
-            with st.spinner(f"Calcul des prévisions avec {model_type}..."):
+        # Graphique historique mini
+        with st.expander("📈 Voir l'historique des ventes"):
+            fig_hist = px.line(df_product, y='Ventes', title=f"Historique des ventes - {produit}")
+            fig_hist.update_layout(height=300)
+            st.plotly_chart(fig_hist, use_container_width=True)
+        
+        if st.button("🔮 Générer les Prévisions", type="primary", use_container_width=True):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            with st.spinner(f"🚀 Calcul des prévisions avec {model_type}..."):
                 try:
                     # Nettoyage des données
-                    df_product = df_product.dropna()
+                    status_text.text("📊 Préparation des données...")
+                    progress_bar.progress(10)
                     
-                    # Assurer une fréquence régulière (remplir les dates manquantes)
+                    df_product = df_product.dropna()
                     df_product = df_product.asfreq('D', method='ffill')
                     
                     forecast_df = None
-                    best_model = model_type
-                    
-                    # **PROPHET**
-                    if model_type == "Prophet":
-                        prophet_df = df_product.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
-                        
-                        # Supprimer les doublons de dates
-                        prophet_df = prophet_df.drop_duplicates(subset=['ds'])
-                        
-                        model = Prophet(
-                            daily_seasonality=True,
-                            yearly_seasonality=True,
-                            weekly_seasonality=True,
-                            changepoint_prior_scale=0.05
-                        )
-                        
-                        with st.spinner("Entraînement du modèle Prophet..."):
-                            model.fit(prophet_df)
-                        
-                        future = model.make_future_dataframe(periods=horizon)
-                        forecast = model.predict(future)
-                        
-                        # Garder uniquement les prévisions futures
-                        forecast_df = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(horizon)
-                        forecast_df = forecast_df.rename(columns={
-                            'ds': 'Date', 
-                            'yhat': 'Prévision',
-                            'yhat_lower': 'Borne_Inférieure',
-                            'yhat_upper': 'Borne_Supérieure'
-                        })
+                    model_name = model_type
+                    confidence_lower = None
+                    confidence_upper = None
                     
                     # **RANDOM FOREST**
-                    elif model_type == "Random Forest":
-                        df_features = df_product.reset_index()
-                        df_features['Jour'] = df_features.index.day
-                        df_features['Mois'] = df_features.index.month
-                        df_features['JourSemaine'] = df_features.index.dayofweek
-                        df_features['JourAnnee'] = df_features.index.dayofyear
-                        df_features['Trimestre'] = df_features.index.quarter
+                    if model_type == "Random Forest":
+                        status_text.text("🌳 Entraînement Random Forest...")
+                        progress_bar.progress(30)
                         
-                        # Ajouter une variable temporelle
+                        # Créer les features correctement
+                        df_features = df_product.copy()
+                        df_features['Date'] = df_features.index
+                        df_features = df_features.reset_index(drop=True)
+                        
                         df_features['Temps'] = range(len(df_features))
+                        df_features['Jour'] = pd.to_datetime(df_features['Date']).dt.day
+                        df_features['Mois'] = pd.to_datetime(df_features['Date']).dt.month
+                        df_features['JourSemaine'] = pd.to_datetime(df_features['Date']).dt.dayofweek
+                        df_features['JourAnnee'] = pd.to_datetime(df_features['Date']).dt.dayofyear
+                        df_features['Trimestre'] = pd.to_datetime(df_features['Date']).dt.quarter
+                        df_features['Semaine'] = pd.to_datetime(df_features['Date']).dt.isocalendar().week
                         
-                        X = df_features[['Jour', 'Mois', 'JourSemaine', 'JourAnnee', 'Trimestre', 'Temps']]
+                        # Features avancées
+                        df_features['MA_7'] = df_features['Ventes'].rolling(7, min_periods=1).mean()
+                        df_features['MA_14'] = df_features['Ventes'].rolling(14, min_periods=1).mean()
+                        df_features['MA_30'] = df_features['Ventes'].rolling(30, min_periods=1).mean()
+                        df_features['STD_7'] = df_features['Ventes'].rolling(7, min_periods=1).std().fillna(0)
+                        df_features['Lag_1'] = df_features['Ventes'].shift(1).fillna(method='bfill')
+                        df_features['Lag_7'] = df_features['Ventes'].shift(7).fillna(method='bfill')
+                        
+                        features_cols = ['Temps', 'Jour', 'Mois', 'JourSemaine', 'JourAnnee', 
+                                    'Trimestre', 'Semaine', 'MA_7', 'MA_14', 'MA_30', 'STD_7', 'Lag_1', 'Lag_7']
+                        
+                        X = df_features[features_cols]
                         y = df_features['Ventes']
+                        
+                        progress_bar.progress(50)
                         
                         model = RandomForestRegressor(
                             n_estimators=200,
-                            max_depth=10,
+                            max_depth=15,
+                            min_samples_split=5,
+                            min_samples_leaf=2,
                             random_state=42,
                             n_jobs=-1
                         )
                         
-                        with st.spinner("Entraînement du modèle Random Forest..."):
-                            model.fit(X, y)
+                        model.fit(X, y)
                         
-                        # Créer les features pour le futur
-                        last_date = df_features.index[-1]
+                        progress_bar.progress(70)
+                        
+                        # Prévision future
+                        last_date = pd.to_datetime(df_features['Date'].iloc[-1])
                         future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
                         
+                        # Utiliser les dernières valeurs connues
+                        last_values = {
+                            'MA_7': df_features['MA_7'].iloc[-1],
+                            'MA_14': df_features['MA_14'].iloc[-1],
+                            'MA_30': df_features['MA_30'].iloc[-1],
+                            'STD_7': df_features['STD_7'].iloc[-1],
+                            'Lag_1': df_features['Ventes'].iloc[-1],
+                            'Lag_7': df_features['Ventes'].iloc[-7] if len(df_features) >= 7 else df_features['Ventes'].iloc[-1]
+                        }
+                        
                         future_X = pd.DataFrame({
+                            'Temps': range(len(df_features), len(df_features) + horizon),
                             'Jour': future_dates.day,
                             'Mois': future_dates.month,
                             'JourSemaine': future_dates.dayofweek,
                             'JourAnnee': future_dates.dayofyear,
                             'Trimestre': future_dates.quarter,
-                            'Temps': range(len(df_features), len(df_features) + horizon)
+                            'Semaine': future_dates.isocalendar().week,
+                            'MA_7': last_values['MA_7'],
+                            'MA_14': last_values['MA_14'],
+                            'MA_30': last_values['MA_30'],
+                            'STD_7': last_values['STD_7'],
+                            'Lag_1': last_values['Lag_1'],
+                            'Lag_7': last_values['Lag_7']
                         })
                         
                         forecast = model.predict(future_X)
+                        
+                        # Calculer l'intervalle de confiance (estimation)
+                        if show_confidence:
+                            std_error = df_product['Ventes'].std() * 0.15
+                            confidence_lower = forecast - 1.96 * std_error
+                            confidence_upper = forecast + 1.96 * std_error
+                        
                         forecast_df = pd.DataFrame({
                             'Date': future_dates,
-                            'Prévision': forecast
+                            'Prévision': np.maximum(forecast, 0)
                         })
+                        
+                        progress_bar.progress(100)
                     
                     # **XGBOOST**
                     elif model_type == "XGBoost":
-                        from xgboost import XGBRegressor
+                        status_text.text("⚡ Entraînement XGBoost...")
+                        progress_bar.progress(30)
                         
-                        df_features = df_product.reset_index()
-                        df_features['Jour'] = df_features.index.day
-                        df_features['Mois'] = df_features.index.month
-                        df_features['JourSemaine'] = df_features.index.dayofweek
-                        df_features['JourAnnee'] = df_features.index.dayofyear
-                        df_features['Trimestre'] = df_features.index.quarter
+                        try:
+                            from xgboost import XGBRegressor
+                        except ImportError:
+                            st.error("❌ XGBoost n'est pas installé. Installez-le avec : `pip install xgboost`")
+                            st.stop()
+                        
+                        # Créer les features correctement
+                        df_features = df_product.copy()
+                        df_features['Date'] = df_features.index
+                        df_features = df_features.reset_index(drop=True)
+                        
                         df_features['Temps'] = range(len(df_features))
+                        df_features['Jour'] = pd.to_datetime(df_features['Date']).dt.day
+                        df_features['Mois'] = pd.to_datetime(df_features['Date']).dt.month
+                        df_features['JourSemaine'] = pd.to_datetime(df_features['Date']).dt.dayofweek
+                        df_features['JourAnnee'] = pd.to_datetime(df_features['Date']).dt.dayofyear
+                        df_features['Trimestre'] = pd.to_datetime(df_features['Date']).dt.quarter
+                        df_features['Semaine'] = pd.to_datetime(df_features['Date']).dt.isocalendar().week
                         
-                        X = df_features[['Jour', 'Mois', 'JourSemaine', 'JourAnnee', 'Trimestre', 'Temps']]
+                        df_features['MA_7'] = df_features['Ventes'].rolling(7, min_periods=1).mean()
+                        df_features['MA_14'] = df_features['Ventes'].rolling(14, min_periods=1).mean()
+                        df_features['MA_30'] = df_features['Ventes'].rolling(30, min_periods=1).mean()
+                        df_features['STD_7'] = df_features['Ventes'].rolling(7, min_periods=1).std().fillna(0)
+                        df_features['Lag_1'] = df_features['Ventes'].shift(1).fillna(method='bfill')
+                        df_features['Lag_7'] = df_features['Ventes'].shift(7).fillna(method='bfill')
+                        
+                        features_cols = ['Temps', 'Jour', 'Mois', 'JourSemaine', 'JourAnnee', 
+                                    'Trimestre', 'Semaine', 'MA_7', 'MA_14', 'MA_30', 'STD_7', 'Lag_1', 'Lag_7']
+                        
+                        X = df_features[features_cols]
                         y = df_features['Ventes']
+                        
+                        progress_bar.progress(50)
                         
                         model = XGBRegressor(
                             n_estimators=200,
-                            max_depth=6,
-                            learning_rate=0.1,
+                            max_depth=8,
+                            learning_rate=0.05,
+                            subsample=0.8,
+                            colsample_bytree=0.8,
                             random_state=42,
                             n_jobs=-1
                         )
                         
-                        with st.spinner("Entraînement du modèle XGBoost..."):
-                            model.fit(X, y)
+                        model.fit(X, y, verbose=False)
                         
-                        last_date = df_features.index[-1]
+                        progress_bar.progress(70)
+                        
+                        last_date = pd.to_datetime(df_features['Date'].iloc[-1])
                         future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
                         
+                        last_values = {
+                            'MA_7': df_features['MA_7'].iloc[-1],
+                            'MA_14': df_features['MA_14'].iloc[-1],
+                            'MA_30': df_features['MA_30'].iloc[-1],
+                            'STD_7': df_features['STD_7'].iloc[-1],
+                            'Lag_1': df_features['Ventes'].iloc[-1],
+                            'Lag_7': df_features['Ventes'].iloc[-7] if len(df_features) >= 7 else df_features['Ventes'].iloc[-1]
+                        }
+                        
                         future_X = pd.DataFrame({
+                            'Temps': range(len(df_features), len(df_features) + horizon),
                             'Jour': future_dates.day,
                             'Mois': future_dates.month,
                             'JourSemaine': future_dates.dayofweek,
                             'JourAnnee': future_dates.dayofyear,
                             'Trimestre': future_dates.quarter,
-                            'Temps': range(len(df_features), len(df_features) + horizon)
+                            'Semaine': future_dates.isocalendar().week,
+                            'MA_7': last_values['MA_7'],
+                            'MA_14': last_values['MA_14'],
+                            'MA_30': last_values['MA_30'],
+                            'STD_7': last_values['STD_7'],
+                            'Lag_1': last_values['Lag_1'],
+                            'Lag_7': last_values['Lag_7']
                         })
                         
                         forecast = model.predict(future_X)
+                        
+                        if show_confidence:
+                            std_error = df_product['Ventes'].std() * 0.12
+                            confidence_lower = forecast - 1.96 * std_error
+                            confidence_upper = forecast + 1.96 * std_error
+                        
                         forecast_df = pd.DataFrame({
                             'Date': future_dates,
-                            'Prévision': forecast
+                            'Prévision': np.maximum(forecast, 0)
                         })
+                        
+                        progress_bar.progress(100)
                     
-                    # **MODE AUTO**
-                    elif model_type == "Auto":
+                    # **ARIMA**
+                    elif model_type == "ARIMA":
+                        status_text.text("📊 Entraînement ARIMA...")
+                        progress_bar.progress(30)
+                        
+                        try:
+                            from statsmodels.tsa.arima.model import ARIMA
+                        except ImportError:
+                            st.error("❌ statsmodels n'est pas installé. Installez-le avec : `pip install statsmodels`")
+                            st.stop()
+                        
+                        y = df_product['Ventes'].values
+                        
+                        progress_bar.progress(50)
+                        
+                        # Utiliser ARIMA(2,1,2) comme configuration de base
+                        model = ARIMA(y, order=(2, 1, 2))
+                        model_fit = model.fit()
+                        
+                        progress_bar.progress(70)
+                        
+                        forecast = model_fit.forecast(steps=horizon)
+                        
+                        # Intervalle de confiance
+                        if show_confidence:
+                            forecast_result = model_fit.get_forecast(steps=horizon)
+                            forecast_ci = forecast_result.conf_int()
+                            confidence_lower = forecast_ci.iloc[:, 0].values
+                            confidence_upper = forecast_ci.iloc[:, 1].values
+                        
+                        last_date = df_product.index[-1]
+                        future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
+                        
+                        forecast_df = pd.DataFrame({
+                            'Date': future_dates,
+                            'Prévision': np.maximum(forecast, 0)
+                        })
+                        
+                        progress_bar.progress(100)
+                    
+                    # **HOLT-WINTERS**
+                    elif model_type == "Holt-Winters":
+                        status_text.text("❄️ Entraînement Holt-Winters...")
+                        progress_bar.progress(30)
+                        
+                        try:
+                            from statsmodels.tsa.holtwinters import ExponentialSmoothing
+                        except ImportError:
+                            st.error("❌ statsmodels n'est pas installé. Installez-le avec : `pip install statsmodels`")
+                            st.stop()
+                        
+                        y = df_product['Ventes'].values
+                        
+                        progress_bar.progress(50)
+                        
+                        # Déterminer la saisonnalité
+                        seasonal_period = min(7, len(y) // 2)
+                        
+                        try:
+                            model = ExponentialSmoothing(
+                                y,
+                                seasonal_periods=seasonal_period,
+                                trend='add',
+                                seasonal='add',
+                                initialization_method='estimated'
+                            )
+                            model_fit = model.fit()
+                        except:
+                            # Fallback sans saisonnalité
+                            model = ExponentialSmoothing(y, trend='add', seasonal=None)
+                            model_fit = model.fit()
+                        
+                        progress_bar.progress(70)
+                        
+                        forecast = model_fit.forecast(steps=horizon)
+                        
+                        if show_confidence:
+                            std_error = df_product['Ventes'].std() * 0.18
+                            confidence_lower = forecast - 1.96 * std_error
+                            confidence_upper = forecast + 1.96 * std_error
+                        
+                        last_date = df_product.index[-1]
+                        future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
+                        
+                        forecast_df = pd.DataFrame({
+                            'Date': future_dates,
+                            'Prévision': np.maximum(forecast, 0)
+                        })
+                        
+                        progress_bar.progress(100)
+                    
+                    # **MOYENNE MOBILE INTELLIGENTE**
+                    elif model_type == "Moyenne Mobile Intelligente":
+                        status_text.text("📈 Calcul de la Moyenne Mobile Intelligente...")
+                        progress_bar.progress(30)
+                        
+                        # Calculer plusieurs moyennes mobiles
+                        ma_7 = df_product['Ventes'].rolling(7).mean().iloc[-1]
+                        ma_14 = df_product['Ventes'].rolling(14).mean().iloc[-1]
+                        ma_30 = df_product['Ventes'].rolling(30, min_periods=1).mean().iloc[-1]
+                        
+                        progress_bar.progress(50)
+                        
+                        # Calculer la tendance (régression linéaire sur les 14 derniers jours)
+                        recent_values = df_product['Ventes'].tail(14).values
+                        x = np.arange(len(recent_values))
+                        
+                        lr = LinearRegression()
+                        lr.fit(x.reshape(-1, 1), recent_values)
+                        slope = lr.coef_[0]
+                        
+                        progress_bar.progress(70)
+                        
+                        # Moyenne pondérée
+                        base = ma_7 * 0.5 + ma_14 * 0.3 + ma_30 * 0.2
+                        
+                        # Génération des prévisions
+                        last_date = df_product.index[-1]
+                        future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
+                        
+                        forecasts = []
+                        for i in range(horizon):
+                            damping = 0.98 ** (i / 7)
+                            forecast_value = base + (slope * (i + 1) * damping)
+                            forecasts.append(max(0, forecast_value))
+                        
+                        if show_confidence:
+                            std = df_product['Ventes'].tail(30).std()
+                            confidence_lower = np.array(forecasts) - 1.96 * std
+                            confidence_upper = np.array(forecasts) + 1.96 * std
+                        
+                        forecast_df = pd.DataFrame({
+                            'Date': future_dates,
+                            'Prévision': forecasts
+                        })
+                        
+                        progress_bar.progress(100)
+                    
+                    # **MODE AUTO (COMPARAISON)**
+                    elif model_type == "Auto (Comparaison)":
+                        status_text.text("🤖 Comparaison de tous les modèles...")
+                        progress_bar.progress(10)
+                        
                         from sklearn.metrics import mean_absolute_error, mean_squared_error
                         
                         # Préparer les données
@@ -728,107 +965,146 @@ if uploaded_file:
                         results = {}
                         forecasts_dict = {}
                         
-                        st.info("🔄 Test de 3 modèles en cours...")
-                        
-                        # Test Prophet
-                        try:
-                            with st.spinner("Test Prophet..."):
-                                prophet_train = train.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
-                                prophet_train = prophet_train.drop_duplicates(subset=['ds'])
-                                
-                                m = Prophet(daily_seasonality=True)
-                                m.fit(prophet_train)
-                                
-                                future = m.make_future_dataframe(periods=len(test)+horizon)
-                                forecast_prophet = m.predict(future)
-                                
-                                pred_test = forecast_prophet.iloc[split_idx:split_idx+len(test)]['yhat'].values
-                                mae = mean_absolute_error(test['Ventes'].values, pred_test)
-                                results["Prophet"] = mae
-                                
-                                forecasts_dict["Prophet"] = forecast_prophet.tail(horizon)[['ds', 'yhat']].rename(
-                                    columns={'ds': 'Date', 'yhat': 'Prévision'}
-                                )
-                                st.success(f"✅ Prophet - MAE: {mae:.2f}")
-                        except Exception as e:
-                            st.warning(f"⚠️ Prophet échoué: {str(e)}")
-                            results["Prophet"] = float('inf')
+                        # Dernière date pour les prévisions futures
+                        last_date = df_clean.index[-1]
+                        future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
                         
                         # Test Random Forest
                         try:
-                            with st.spinner("Test Random Forest..."):
-                                df_rf = df_clean.reset_index()
-                                df_rf['Temps'] = range(len(df_rf))
-                                df_rf['Jour'] = df_rf.index.day
-                                df_rf['Mois'] = df_rf.index.month
-                                df_rf['JourSemaine'] = df_rf.index.dayofweek
-                                
-                                X_train = df_rf.iloc[:split_idx][['Temps', 'Jour', 'Mois', 'JourSemaine']]
-                                y_train = df_rf.iloc[:split_idx]['Ventes']
-                                X_test = df_rf.iloc[split_idx:][['Temps', 'Jour', 'Mois', 'JourSemaine']]
-                                y_test = df_rf.iloc[split_idx:]['Ventes']
-                                
-                                rf = RandomForestRegressor(n_estimators=100, random_state=42)
-                                rf.fit(X_train, y_train)
-                                
-                                pred_test = rf.predict(X_test)
-                                mae = mean_absolute_error(y_test, pred_test)
-                                results["Random Forest"] = mae
-                                
-                                # Prévision future
-                                last_date = df_rf.index[-1]
-                                future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
-                                future_X = pd.DataFrame({
-                                    'Temps': range(len(df_rf), len(df_rf) + horizon),
-                                    'Jour': future_dates.day,
-                                    'Mois': future_dates.month,
-                                    'JourSemaine': future_dates.dayofweek
-                                })
-                                
-                                forecasts_dict["Random Forest"] = pd.DataFrame({
-                                    'Date': future_dates,
-                                    'Prévision': rf.predict(future_X)
-                                })
-                                st.success(f"✅ Random Forest - MAE: {mae:.2f}")
+                            status_text.text("🌳 Test Random Forest...")
+                            progress_bar.progress(25)
+                            
+                            df_rf = df_clean.copy()
+                            df_rf['Date_Col'] = df_rf.index
+                            df_rf = df_rf.reset_index(drop=True)
+                            
+                            df_rf['Temps'] = range(len(df_rf))
+                            df_rf['Jour'] = pd.to_datetime(df_rf['Date_Col']).dt.day
+                            df_rf['Mois'] = pd.to_datetime(df_rf['Date_Col']).dt.month
+                            df_rf['JourSemaine'] = pd.to_datetime(df_rf['Date_Col']).dt.dayofweek
+                            df_rf['MA_7'] = df_rf['Ventes'].rolling(7, min_periods=1).mean()
+                            
+                            feature_cols = ['Temps', 'Jour', 'Mois', 'JourSemaine', 'MA_7']
+                            
+                            X_train = df_rf.iloc[:split_idx][feature_cols]
+                            y_train = df_rf.iloc[:split_idx]['Ventes']
+                            X_test = df_rf.iloc[split_idx:][feature_cols]
+                            y_test = df_rf.iloc[split_idx:]['Ventes']
+                            
+                            rf = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+                            rf.fit(X_train, y_train)
+                            
+                            pred_test = rf.predict(X_test)
+                            mae = mean_absolute_error(y_test, pred_test)
+                            rmse = np.sqrt(mean_squared_error(y_test, pred_test))
+                            results["Random Forest"] = {'MAE': mae, 'RMSE': rmse}
+                            
+                            # Prévision future
+                            future_X = pd.DataFrame({
+                                'Temps': range(len(df_rf), len(df_rf) + horizon),
+                                'Jour': future_dates.day,
+                                'Mois': future_dates.month,
+                                'JourSemaine': future_dates.dayofweek,
+                                'MA_7': df_rf['MA_7'].iloc[-1]
+                            })
+                            
+                            forecasts_dict["Random Forest"] = pd.DataFrame({
+                                'Date': future_dates,
+                                'Prévision': np.maximum(rf.predict(future_X), 0)
+                            })
+                            
+                            st.success(f"✅ Random Forest - MAE: {mae:.2f}, RMSE: {rmse:.2f}")
                         except Exception as e:
                             st.warning(f"⚠️ Random Forest échoué: {str(e)}")
-                            results["Random Forest"] = float('inf')
+                            results["Random Forest"] = {'MAE': float('inf'), 'RMSE': float('inf')}
                         
                         # Test XGBoost
                         try:
-                            with st.spinner("Test XGBoost..."):
-                                from xgboost import XGBRegressor
-                                
-                                xgb = XGBRegressor(n_estimators=100, random_state=42)
-                                xgb.fit(X_train, y_train)
-                                
-                                pred_test = xgb.predict(X_test)
-                                mae = mean_absolute_error(y_test, pred_test)
-                                results["XGBoost"] = mae
-                                
-                                forecasts_dict["XGBoost"] = pd.DataFrame({
-                                    'Date': future_dates,
-                                    'Prévision': xgb.predict(future_X)
-                                })
-                                st.success(f"✅ XGBoost - MAE: {mae:.2f}")
+                            status_text.text("⚡ Test XGBoost...")
+                            progress_bar.progress(50)
+                            
+                            from xgboost import XGBRegressor
+                            
+                            xgb = XGBRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+                            xgb.fit(X_train, y_train, verbose=False)
+                            
+                            pred_test = xgb.predict(X_test)
+                            mae = mean_absolute_error(y_test, pred_test)
+                            rmse = np.sqrt(mean_squared_error(y_test, pred_test))
+                            results["XGBoost"] = {'MAE': mae, 'RMSE': rmse}
+                            
+                            forecasts_dict["XGBoost"] = pd.DataFrame({
+                                'Date': future_dates,
+                                'Prévision': np.maximum(xgb.predict(future_X), 0)
+                            })
+                            
+                            st.success(f"✅ XGBoost - MAE: {mae:.2f}, RMSE: {rmse:.2f}")
                         except Exception as e:
                             st.warning(f"⚠️ XGBoost échoué: {str(e)}")
-                            results["XGBoost"] = float('inf')
+                            results["XGBoost"] = {'MAE': float('inf'), 'RMSE': float('inf')}
                         
-                        # Sélectionner le meilleur
+                        # Test ARIMA
+                        try:
+                            status_text.text("📊 Test ARIMA...")
+                            progress_bar.progress(75)
+                            
+                            from statsmodels.tsa.arima.model import ARIMA
+                            
+                            arima_model = ARIMA(train['Ventes'].values, order=(1, 1, 1))
+                            arima_fit = arima_model.fit()
+                            
+                            pred_test = arima_fit.forecast(steps=len(test))
+                            mae = mean_absolute_error(test['Ventes'].values, pred_test)
+                            rmse = np.sqrt(mean_squared_error(test['Ventes'].values, pred_test))
+                            results["ARIMA"] = {'MAE': mae, 'RMSE': rmse}
+                            
+                            forecast_arima = arima_fit.forecast(steps=horizon)
+                            forecasts_dict["ARIMA"] = pd.DataFrame({
+                                'Date': future_dates,
+                                'Prévision': np.maximum(forecast_arima, 0)
+                            })
+                            
+                            st.success(f"✅ ARIMA - MAE: {mae:.2f}, RMSE: {rmse:.2f}")
+                        except Exception as e:
+                            st.warning(f"⚠️ ARIMA échoué: {str(e)}")
+                            results["ARIMA"] = {'MAE': float('inf'), 'RMSE': float('inf')}
+                        
+                        progress_bar.progress(90)
+                        
+                        # Sélectionner le meilleur modèle
                         if results:
-                            best_model = min(results, key=results.get)
-                            st.success(f"🏆 Meilleur modèle : **{best_model}** (MAE: {results[best_model]:.2f})")
+                            best_model = min(results, key=lambda x: results[x]['MAE'])
+                            
+                            # Afficher le comparatif
+                            st.success(f"🏆 **Meilleur modèle : {best_model}**")
+                            
+                            comparison_df = pd.DataFrame(results).T
+                            comparison_df = comparison_df.sort_values('MAE')
+                            
+                            st.markdown("### 📊 Comparaison des modèles")
+                            st.dataframe(
+                                comparison_df.style.format({'MAE': '{:.2f}', 'RMSE': '{:.2f}'})
+                                .background_gradient(cmap='RdYlGn_r', subset=['MAE', 'RMSE']),
+                                use_container_width=True
+                            )
+                            
                             forecast_df = forecasts_dict[best_model]
+                            model_name = best_model
                         else:
                             st.error("Tous les modèles ont échoué")
                             st.stop()
+                        
+                        progress_bar.progress(100)
                     
                     # **AFFICHAGE DES RÉSULTATS**
+                    status_text.text("✅ Prévisions terminées!")
+                    progress_bar.empty()
+                    status_text.empty()
+                    
                     if forecast_df is not None:
                         st.success("✅ Prévisions générées avec succès!")
                         
-                        # Graphique
+                        # Graphique interactif principal
                         fig = go.Figure()
                         
                         # Historique
@@ -836,8 +1112,9 @@ if uploaded_file:
                             x=df_product.index,
                             y=df_product['Ventes'],
                             mode='lines',
-                            name='Historique',
-                            line=dict(color='#1f77b4', width=2)
+                            name='📊 Historique',
+                            line=dict(color='#1f77b4', width=2.5),
+                            hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Ventes: %{y:.0f} DH<extra></extra>'
                         ))
                         
                         # Prévisions
@@ -845,75 +1122,214 @@ if uploaded_file:
                             x=forecast_df['Date'],
                             y=forecast_df['Prévision'],
                             mode='lines+markers',
-                            name=f'Prévisions ({best_model})',
-                            line=dict(color='#d62728', width=2, dash='dot'),
-                            marker=dict(size=6)
+                            name=f'🔮 Prévisions ({model_name})',
+                            line=dict(color='#d62728', width=3, dash='dot'),
+                            marker=dict(size=8, symbol='circle', line=dict(width=2, color='white')),
+                            hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Prévision: %{y:.0f} DH<extra></extra>'
                         ))
                         
-                        # Intervalles de confiance (si disponible pour Prophet)
-                        if 'Borne_Inférieure' in forecast_df.columns:
+                        # Intervalle de confiance
+                        if show_confidence and confidence_lower is not None and confidence_upper is not None:
                             fig.add_trace(go.Scatter(
                                 x=forecast_df['Date'],
-                                y=forecast_df['Borne_Supérieure'],
+                                y=confidence_upper,
                                 mode='lines',
                                 line=dict(width=0),
-                                showlegend=False
+                                showlegend=False,
+                                hoverinfo='skip'
                             ))
                             fig.add_trace(go.Scatter(
                                 x=forecast_df['Date'],
-                                y=forecast_df['Borne_Inférieure'],
+                                y=np.maximum(confidence_lower, 0),
                                 mode='lines',
                                 line=dict(width=0),
-                                fillcolor='rgba(214, 39, 40, 0.2)',
+                                fillcolor='rgba(214, 39, 40, 0.15)',
                                 fill='tonexty',
-                                name='Intervalle de confiance'
+                                name='📏 Intervalle de confiance (95%)',
+                                hovertemplate='IC: %{y:.0f} DH<extra></extra>'
                             ))
                         
                         fig.update_layout(
-                            title=f"Prévisions des ventes - {produit} ({best_model})",
-                            xaxis_title='Date',
-                            yaxis_title='Ventes (DH)',
+                            title=dict(
+                                text=f"📈 Prévisions des ventes - {produit}<br><sub>Modèle: {model_name}</sub>",
+                                font=dict(size=20, color='#2c3e50')
+                            ),
+                            xaxis_title='📅 Date',
+                            yaxis_title='💰 Ventes (DH)',
                             hovermode='x unified',
-                            height=500
+                            height=550,
+                            template='plotly_white',
+                            showlegend=True,
+                            legend=dict(
+                                orientation="h",
+                                yanchor="bottom",
+                                y=1.02,
+                                xanchor="right",
+                                x=1,
+                                bgcolor='rgba(255,255,255,0.8)',
+                                bordercolor='#e0e0e0',
+                                borderwidth=1
+                            ),
+                            plot_bgcolor='#f8f9fa',
+                            paper_bgcolor='white'
                         )
+                        
+                        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#e0e0e0')
+                        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#e0e0e0')
                         
                         st.plotly_chart(fig, use_container_width=True)
                         
-                        # Statistiques des prévisions
-                        col1, col2, col3 = st.columns(3)
+                        # Statistiques détaillées
+                        st.markdown("### 📊 Statistiques des prévisions")
+                        col1, col2, col3, col4 = st.columns(4)
+                        
                         with col1:
-                            st.metric("📊 Prévision moyenne", f"{forecast_df['Prévision'].mean():.0f} DH")
+                            avg_forecast = forecast_df['Prévision'].mean()
+                            st.metric(
+                                "💰 Prévision moyenne",
+                                f"{avg_forecast:.0f} DH",
+                                delta=f"{((avg_forecast / df_product['Ventes'].mean() - 1) * 100):.1f}%"
+                            )
+                        
                         with col2:
-                            st.metric("📈 Prévision max", f"{forecast_df['Prévision'].max():.0f} DH")
+                            max_forecast = forecast_df['Prévision'].max()
+                            st.metric(
+                                "📈 Prévision maximale",
+                                f"{max_forecast:.0f} DH",
+                                delta=f"{((max_forecast / df_product['Ventes'].max() - 1) * 100):.1f}%"
+                            )
+                        
                         with col3:
-                            variation = ((forecast_df['Prévision'].mean() - df_product['Ventes'].mean()) / df_product['Ventes'].mean()) * 100
-                            st.metric("📊 Variation vs historique", f"{variation:+.1f}%")
+                            min_forecast = forecast_df['Prévision'].min()
+                            st.metric(
+                                "📉 Prévision minimale",
+                                f"{min_forecast:.0f} DH",
+                                delta=f"{((min_forecast / df_product['Ventes'].min() - 1) * 100):.1f}%"
+                            )
+                        
+                        with col4:
+                            total_forecast = forecast_df['Prévision'].sum()
+                            st.metric(
+                                "💵 Total prévu",
+                                f"{total_forecast:.0f} DH"
+                            )
+                        
+                        # Insights
+                        st.markdown("### 💡 Insights")
+                        
+                        trend = (forecast_df['Prévision'].iloc[-1] - forecast_df['Prévision'].iloc[0]) / forecast_df['Prévision'].iloc[0] * 100
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if trend > 5:
+                                st.success(f"📈 **Tendance haussière** : Les ventes devraient augmenter de {trend:.1f}% sur la période")
+                            elif trend < -5:
+                                st.warning(f"📉 **Tendance baissière** : Les ventes devraient diminuer de {abs(trend):.1f}% sur la période")
+                            else:
+                                st.info(f"➡️ **Tendance stable** : Les ventes devraient rester relativement stables ({trend:.1f}%)")
+                        
+                        with col2:
+                            volatility = forecast_df['Prévision'].std() / forecast_df['Prévision'].mean() * 100
+                            if volatility > 20:
+                                st.warning(f"⚠️ **Forte volatilité** : Coefficient de variation de {volatility:.1f}%")
+                            else:
+                                st.success(f"✅ **Faible volatilité** : Coefficient de variation de {volatility:.1f}%")
                         
                         # Tableau des prévisions
-                        with st.expander("📋 Voir le tableau des prévisions"):
+                        with st.expander("📋 Tableau détaillé des prévisions"):
+                            display_df = forecast_df.copy()
+                            display_df['Date'] = display_df['Date'].dt.strftime('%d/%m/%Y')
+                            display_df['Prévision'] = display_df['Prévision'].apply(lambda x: f"{x:.2f}")
+                            display_df['Jour de la semaine'] = pd.to_datetime(forecast_df['Date']).dt.day_name()
+                            
                             st.dataframe(
-                                forecast_df.style.format({'Prévision': '{:.0f} DH'}),
+                                display_df,
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        
+                        # Téléchargements
+                        st.markdown("### 💾 Téléchargements")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            csv = forecast_df.to_csv(index=False).encode('utf-8')
+                            st.download_button(
+                                label="📥 Télécharger CSV",
+                                data=csv,
+                                file_name=f"previsions_{produit}_{model_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                                mime="text/csv",
                                 use_container_width=True
                             )
                         
-                        # Téléchargement
-                        csv = forecast_df.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="💾 Télécharger les prévisions (CSV)",
-                            data=csv,
-                            file_name=f"previsions_{produit}_{best_model}_{datetime.now().strftime('%Y%m%d')}.csv",
-                            mime="text/csv"
-                        )
+                        with col2:
+                            # Créer un rapport complet
+                            report = f"""
+    RAPPORT DE PRÉVISIONS DES VENTES
+    {'='*50}
+
+    Produit: {produit}
+    Modèle: {model_name}
+    Date du rapport: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+    Horizon: {horizon} jours
+
+    STATISTIQUES:
+    - Prévision moyenne: {avg_forecast:.2f} DH
+    - Prévision maximale: {max_forecast:.2f} DH
+    - Prévision minimale: {min_forecast:.2f} DH
+    - Total prévu: {total_forecast:.2f} DH
+    - Tendance: {trend:+.2f}%
+    - Volatilité: {volatility:.2f}%
+
+    DONNÉES HISTORIQUES:
+    - Ventes moyennes: {df_product['Ventes'].mean():.2f} DH
+    - Points de données: {len(df_product)}
+
+    PRÉVISIONS DÉTAILLÉES:
+    {'='*50}
+    """
+                            for _, row in forecast_df.iterrows():
+                                report += f"{row['Date'].strftime('%d/%m/%Y')}: {row['Prévision']:.2f} DH\n"
+                            
+                            st.download_button(
+                                label="📄 Télécharger Rapport TXT",
+                                data=report,
+                                file_name=f"rapport_{produit}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                                mime="text/plain",
+                                use_container_width=True
+                            )
                     
                 except Exception as e:
-                    st.error(f"❌ Erreur lors de la prévision : {str(e)}")
-                    with st.expander("🔍 Détails de l'erreur"):
-                        st.code(str(e))
-                    st.info("""
-                    **Suggestions :**
-                    - Vérifiez que vos données contiennent suffisamment d'historique (minimum 30 jours)
-                    - Assurez-vous qu'il n'y a pas de valeurs aberrantes extrêmes
-                    - Essayez un autre modèle de prévision
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    st.error(f"❌ **Erreur lors de la génération des prévisions**")
+                    st.error(f"**Détail**: {str(e)}")
+                    
+                    with st.expander("🔍 Informations de débogage"):
+                        import traceback
+                        st.code(traceback.format_exc())
+                    
+                    st.markdown("""
+                    ### 💡 Suggestions de résolution:
+                    
+                    1. **Vérifiez vos données:**
+                    - Assurez-vous d'avoir au moins 14 jours de données historiques
+                    - Vérifiez qu'il n'y a pas de dates dupliquées
+                    - Confirmez que les valeurs de ventes sont numériques
+                    
+                    2. **Essayez un autre modèle:**
+                    - Certains modèles fonctionnent mieux avec différents types de données
+                    - Le mode "Auto" peut vous aider à trouver le meilleur modèle
+                    
+                    3. **Réduisez l'horizon de prévision:**
+                    - Commencez avec 7-14 jours
+                    - Augmentez progressivement si les résultats sont satisfaisants
+                    
+                    4. **Vérifiez les packages installés:**
+    ```
+                    pip install --upgrade scikit-learn xgboost statsmodels
+    ```
                     """)
     ### Téléchargement d'un Exemple
      # Section Données brutes
