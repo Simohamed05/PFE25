@@ -401,14 +401,53 @@ def send_email_safe(to_email, subject, body):
 
 @st.cache_data(ttl=3600)
 def load_data(file):
-    """Charge et prépare les données avec mise en cache"""
+    """Charge et prépare les données avec mise en cache - VERSION FLEXIBLE"""
     try:
-        df = pd.read_csv(file, sep=";")
-        df["Date"] = pd.to_datetime(df["Date"], format='%d/%m/%Y', errors='coerce')
+        # Essayer différents séparateurs
+        separators = [';', ',', '\t', '|']
+        df = None
+        
+        for sep in separators:
+            try:
+                df = pd.read_csv(file, sep=sep, encoding='utf-8')
+                if len(df.columns) > 1:  # Au moins 2 colonnes
+                    break
+            except:
+                try:
+                    df = pd.read_csv(file, sep=sep, encoding='latin-1')
+                    if len(df.columns) > 1:
+                        break
+                except:
+                    continue
+        
+        if df is None or len(df.columns) <= 1:
+            st.error("❌ Impossible de lire le fichier. Vérifiez le format.")
+            return None
+        
+        # Détecter et convertir la colonne de date
+        date_col = None
+        for col in df.columns:
+            if 'date' in col.lower() or df[col].dtype == 'object':
+                try:
+                    df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
+                    if df[col].notna().sum() > 0:
+                        date_col = col
+                        break
+                except:
+                    continue
+        
+        if date_col is None:
+            st.warning("⚠️ Aucune colonne de date détectée automatiquement")
+            return df
+        
+        # Renommer et définir l'index
+        df = df.rename(columns={date_col: 'Date'})
         df = df.dropna(subset=['Date'])
-        df = df.set_index("Date")
+        df = df.set_index('Date')
         df = df.sort_index()
+        
         return df
+        
     except Exception as e:
         st.error(f"Erreur lors du chargement: {str(e)}")
         return None
@@ -460,8 +499,20 @@ if uploaded_file:
     try:
         df = load_data(uploaded_file)
         
-        if df is None:
-            st.stop()
+        if df is not None:
+            # 🆕 AFFICHER INFO SUR LE FICHIER CHARGÉ
+            st.sidebar.success(f"✅ Fichier chargé: {uploaded_file.name}")
+            st.sidebar.info(f"""
+            **Détails du fichier:**
+            - Lignes: {len(df)}
+            - Colonnes: {len(df.columns)}
+            - Colonnes détectées: {', '.join(df.columns.tolist())}
+            """)
+            
+            # Vérifier si le fichier est vide
+            if len(df) == 0:
+                st.error("❌ Le fichier est vide")
+                st.stop()
         
         # Vérification des colonnes obligatoires
         required_columns = ['Ventes', 'Produit']
@@ -1851,13 +1902,139 @@ Consultez votre tableau de bord pour plus de détails.
                 st.info("Aucun historique d'alertes disponible")
         
         # ==================== PAGE PRÉVISIONS (déjà optimisée précédemment) ====================
+        # ==================== PAGE PRÉVISIONS (FLEXIBLE) ====================
         elif option == "🔮 Prévisions":
             st.markdown("## 🔮 Prévisions des Ventes par IA")
             
+            # 🆕 DÉTECTION AUTOMATIQUE DES COLONNES
+            st.info("🤖 Détection automatique des colonnes en cours...")
+            
+            # Trouver la colonne de date
+            date_col = None
+            for col in df.columns:
+                if df[col].dtype == 'object' or pd.api.types.is_datetime64_any_dtype(df[col]):
+                    try:
+                        test_dates = pd.to_datetime(df[col].head(), errors='coerce')
+                        if test_dates.notna().sum() > 0:
+                            date_col = col
+                            break
+                    except:
+                        continue
+            
+            # Si l'index est déjà une date
+            if date_col is None and pd.api.types.is_datetime64_any_dtype(df.index):
+                df = df.reset_index()
+                date_col = df.columns[0]
+            
+            if date_col is None:
+                st.error("❌ Aucune colonne de date détectée dans votre fichier")
+                st.info("💡 Assurez-vous d'avoir une colonne avec des dates (format JJ/MM/AAAA ou similaire)")
+                
+                # Afficher les colonnes disponibles
+                st.write("**Colonnes disponibles dans votre fichier:**")
+                st.write(df.columns.tolist())
+                st.stop()
+            
+            # Trouver la colonne de produit/catégorie (texte)
+            produit_col = None
+            categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            
+            # Retirer la colonne de date des catégorielles
+            if date_col in categorical_cols:
+                categorical_cols.remove(date_col)
+            
+            if len(categorical_cols) > 0:
+                # Prendre la colonne avec le moins de valeurs uniques (probablement la catégorie)
+                produit_col = min(categorical_cols, key=lambda col: df[col].nunique())
+            else:
+                produit_col = None
+            
+            # Trouver la colonne de ventes/valeurs (numérique)
+            ventes_col = None
+            numeric_cols = df.select_dtypes(include=['float64', 'int64', 'int32', 'float32']).columns.tolist()
+            
+            if len(numeric_cols) > 0:
+                # Prendre la colonne numérique avec la plus grande somme (probablement les ventes)
+                ventes_col = max(numeric_cols, key=lambda col: df[col].sum())
+            else:
+                st.error("❌ Aucune colonne numérique détectée pour les valeurs à prévoir")
+                st.info("💡 Assurez-vous d'avoir au moins une colonne avec des valeurs numériques")
+                st.stop()
+            
+            # Afficher les colonnes détectées
+            st.success(f"""
+            ✅ **Colonnes détectées automatiquement:**
+            - 📅 **Date**: `{date_col}`
+            - 📦 **Catégorie**: `{produit_col if produit_col else 'Non détectée (prévisions globales)'}` 
+            - 💰 **Valeurs**: `{ventes_col}`
+            """)
+            
+            # Permettre à l'utilisateur de modifier si nécessaire
+            with st.expander("⚙️ Modifier les colonnes détectées (optionnel)"):
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    all_cols = df.columns.tolist()
+                    date_col = st.selectbox(
+                        "Colonne Date", 
+                        all_cols,
+                        index=all_cols.index(date_col) if date_col in all_cols else 0
+                    )
+                
+                with col2:
+                    cat_options = ['Aucune (Global)'] + df.select_dtypes(include=['object', 'category']).columns.tolist()
+                    if produit_col and produit_col in cat_options:
+                        default_idx = cat_options.index(produit_col)
+                    else:
+                        default_idx = 0
+                    
+                    produit_col_selected = st.selectbox("Colonne Catégorie", cat_options, index=default_idx)
+                    produit_col = None if produit_col_selected == 'Aucune (Global)' else produit_col_selected
+                
+                with col3:
+                    ventes_col = st.selectbox(
+                        "Colonne Valeurs", 
+                        numeric_cols,
+                        index=numeric_cols.index(ventes_col) if ventes_col in numeric_cols else 0
+                    )
+            
+            # Préparer les données avec les colonnes détectées
+            try:
+                df_work = df[[date_col, ventes_col]].copy()
+                
+                if produit_col:
+                    df_work['Categorie'] = df[produit_col]
+                
+                # Renommer les colonnes pour standardiser
+                df_work = df_work.rename(columns={date_col: 'Date', ventes_col: 'Ventes'})
+                
+                # Convertir la date
+                df_work['Date'] = pd.to_datetime(df_work['Date'], dayfirst=True, errors='coerce')
+                df_work = df_work.dropna(subset=['Date'])
+                df_work = df_work.set_index('Date').sort_index()
+                
+                # Supprimer les valeurs négatives ou nulles
+                df_work = df_work[df_work['Ventes'] > 0]
+                
+                if len(df_work) == 0:
+                    st.error("❌ Aucune donnée valide après nettoyage")
+                    st.stop()
+                    
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la préparation des données: {str(e)}")
+                st.stop()
+            
             # Configuration
             col1, col2 = st.columns(2)
+            
             with col1:
-                produit = st.selectbox("📦 Sélectionnez un produit", df['Produit'].unique())
+                if produit_col and 'Categorie' in df_work.columns:
+                    categories = df_work['Categorie'].unique()
+                    produit = st.selectbox("📦 Sélectionnez une catégorie", categories)
+                else:
+                    produit = "Global"
+                    st.info("📊 Prévisions globales (toutes catégories confondues)")
+            
             with col2:
                 model_type = st.selectbox("🤖 Modèle de prévision", [
                     "Random Forest",
@@ -1870,17 +2047,17 @@ Consultez votre tableau de bord pour plus de détails.
             
             # Définitions des modèles
             model_definitions = {
-                "Random Forest": "🌳 **Random Forest** : Algorithme d'ensemble qui combine plusieurs arbres de décision. Excellent pour capturer les patterns complexes.",
-                "XGBoost": "⚡ **XGBoost** : Algorithme de gradient boosting avancé. Très précis pour les séries temporelles.",
-                "ARIMA": "📊 **ARIMA** : Modèle statistique classique adapté aux tendances linéaires.",
-                "Holt-Winters": "❄️ **Holt-Winters** : Lissage exponentiel qui gère tendances et saisonnalités automatiquement.",
-                "Moyenne Mobile Intelligente": "📈 **Moyenne Mobile Intelligente** : Approche simple mais efficace basée sur les moyennes pondérées.",
+                "Random Forest": "🌳 **Random Forest** : Algorithme d'ensemble qui combine plusieurs arbres de décision. Excellent pour patterns complexes.",
+                "XGBoost": "⚡ **XGBoost** : Algorithme de gradient boosting avancé. Très précis pour séries temporelles.",
+                "ARIMA": "📊 **ARIMA** : Modèle statistique classique pour séries temporelles. Idéal pour tendances linéaires.",
+                "Holt-Winters": "❄️ **Holt-Winters** : Lissage exponentiel avec gestion automatique des tendances et saisonnalités.",
+                "Moyenne Mobile Intelligente": "📈 **Moyenne Mobile** : Approche simple mais efficace basée sur moyennes pondérées.",
                 "Auto (Comparaison)": "🤖 **Mode Auto** : Compare tous les modèles et sélectionne automatiquement le meilleur."
             }
             
             st.info(model_definitions[model_type])
             
-            # Paramètres
+            # Paramètres avancés
             with st.expander("⚙️ Paramètres avancés", expanded=False):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -1888,25 +2065,31 @@ Consultez votre tableau de bord pour plus de détails.
                 with col2:
                     show_confidence = st.checkbox("📏 Afficher intervalle de confiance", value=True)
             
-            # Filtrer données du produit
-            df_product = df[df['Produit'] == produit][['Ventes']].copy()
+            # Filtrer données du produit/catégorie
+            if produit_col and produit != "Global" and 'Categorie' in df_work.columns:
+                df_product = df_work[df_work['Categorie'] == produit][['Ventes']].copy()
+            else:
+                df_product = df_work[['Ventes']].copy()
             
             # Vérification
             if len(df_product) < 14:
-                st.error(f"❌ Pas assez de données pour {produit}. Minimum : 14 jours. Vous avez : {len(df_product)}")
+                st.error(f"❌ Pas assez de données pour '{produit}'. Minimum requis : 14 jours. Vous avez : {len(df_product)}")
+                st.info("💡 Essayez de sélectionner une autre catégorie ou d'importer plus de données")
                 st.stop()
             
-            # Stats produit
+            # Stats du produit
+            st.markdown("### 📊 Statistiques des Données Sélectionnées")
             col1, col2, col3, col4 = st.columns(4)
+            
             with col1:
                 st.metric("📊 Points de données", len(df_product))
             with col2:
-                st.metric("💰 Ventes moyennes", f"{df_product['Ventes'].mean():.0f} DH")
+                st.metric("💰 Moyenne", f"{df_product['Ventes'].mean():.2f}")
             with col3:
-                st.metric("📈 Ventes max", f"{df_product['Ventes'].max():.0f} DH")
+                st.metric("📈 Maximum", f"{df_product['Ventes'].max():.2f}")
             with col4:
                 growth = df_product['Ventes'].pct_change().mean()
-                st.metric("📊 Tendance", f"{growth*100:+.2f}%")
+                st.metric("📊 Tendance quotidienne", f"{growth*100:+.2f}%")
             
             # Historique mini
             with st.expander("📈 Voir l'historique complet"):
@@ -1914,6 +2097,7 @@ Consultez votre tableau de bord pour plus de détails.
                 fig_hist.update_layout(height=300, template='plotly_white')
                 st.plotly_chart(fig_hist, use_container_width=True)
             
+            # Bouton de génération
             if st.button("🔮 Générer les Prévisions", type="primary", use_container_width=True):
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -1931,12 +2115,11 @@ Consultez votre tableau de bord pour plus de détails.
                     confidence_lower = None
                     confidence_upper = None
                     
-                    # RANDOM FOREST
+                    # ========== RANDOM FOREST ==========
                     if model_type == "Random Forest":
                         status_text.text("🌳 Entraînement Random Forest...")
                         progress_bar.progress(30)
                         
-                        # Créer features
                         df_features = df_product.copy()
                         df_features['Date'] = df_features.index
                         df_features = df_features.reset_index(drop=True)
@@ -1970,7 +2153,6 @@ Consultez votre tableau de bord pour plus de détails.
                         model.fit(X, y)
                         progress_bar.progress(70)
                         
-                        # Prévisions
                         last_date = pd.to_datetime(df_features['Date'].iloc[-1])
                         future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
                         
@@ -2000,7 +2182,7 @@ Consultez votre tableau de bord pour plus de détails.
                         
                         progress_bar.progress(100)
                     
-                    # XGBOOST
+                    # ========== XGBOOST ==========
                     elif model_type == "XGBoost":
                         status_text.text("⚡ Entraînement XGBoost...")
                         progress_bar.progress(30)
@@ -2073,7 +2255,7 @@ Consultez votre tableau de bord pour plus de détails.
                         
                         progress_bar.progress(100)
                     
-                    # ARIMA
+                    # ========== ARIMA ==========
                     elif model_type == "ARIMA":
                         status_text.text("📊 Entraînement ARIMA...")
                         progress_bar.progress(30)
@@ -2111,7 +2293,7 @@ Consultez votre tableau de bord pour plus de détails.
                         
                         progress_bar.progress(100)
                     
-                    # HOLT-WINTERS
+                    # ========== HOLT-WINTERS ==========
                     elif model_type == "Holt-Winters":
                         status_text.text("❄️ Entraînement Holt-Winters...")
                         progress_bar.progress(30)
@@ -2160,7 +2342,7 @@ Consultez votre tableau de bord pour plus de détails.
                         
                         progress_bar.progress(100)
                     
-                    # MOYENNE MOBILE INTELLIGENTE
+                    # ========== MOYENNE MOBILE INTELLIGENTE ==========
                     elif model_type == "Moyenne Mobile Intelligente":
                         status_text.text("📈 Calcul Moyenne Mobile Intelligente...")
                         progress_bar.progress(30)
@@ -2203,7 +2385,7 @@ Consultez votre tableau de bord pour plus de détails.
                         
                         progress_bar.progress(100)
                     
-                    # MODE AUTO
+                    # ========== MODE AUTO ==========
                     elif model_type == "Auto (Comparaison)":
                         status_text.text("🤖 Comparaison des modèles...")
                         progress_bar.progress(10)
@@ -2346,7 +2528,7 @@ Consultez votre tableau de bord pour plus de détails.
                         
                         progress_bar.progress(100)
                     
-                    # AFFICHAGE DES RÉSULTATS
+                    # ========== AFFICHAGE DES RÉSULTATS ==========
                     status_text.text("✅ Prévisions terminées!")
                     progress_bar.empty()
                     status_text.empty()
@@ -2364,7 +2546,7 @@ Consultez votre tableau de bord pour plus de détails.
                             mode='lines',
                             name='📊 Historique',
                             line=dict(color='#6366f1', width=2.5),
-                            hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Ventes: %{y:.0f} DH<extra></extra>'
+                            hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Ventes: %{y:.2f}<extra></extra>'
                         ))
                         
                         fig.add_trace(go.Scatter(
@@ -2374,7 +2556,7 @@ Consultez votre tableau de bord pour plus de détails.
                             name=f'🔮 Prévisions ({model_name})',
                             line=dict(color='#ef4444', width=3, dash='dot'),
                             marker=dict(size=8, symbol='circle', line=dict(width=2, color='white')),
-                            hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Prévision: %{y:.0f} DH<extra></extra>'
+                            hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Prévision: %{y:.2f}<extra></extra>'
                         ))
                         
                         if show_confidence and confidence_lower is not None and confidence_upper is not None:
@@ -2394,16 +2576,16 @@ Consultez votre tableau de bord pour plus de détails.
                                 fillcolor='rgba(239, 68, 68, 0.15)',
                                 fill='tonexty',
                                 name='📏 Intervalle de confiance (95%)',
-                                hovertemplate='IC: %{y:.0f} DH<extra></extra>'
+                                hovertemplate='IC: %{y:.2f}<extra></extra>'
                             ))
                         
                         fig.update_layout(
                             title=dict(
-                                text=f"📈 Prévisions des ventes - {produit}<br><sub style='font-size: 14px;'>Modèle: {model_name}</sub>",
+                                text=f"📈 Prévisions - {produit}<br><sub style='font-size: 14px;'>Modèle: {model_name}</sub>",
                                 font=dict(size=20)
                             ),
                             xaxis_title='📅 Date',
-                            yaxis_title='💰 Ventes (DH)',
+                            yaxis_title='💰 Valeurs',
                             hovermode='x unified',
                             height=550,
                             template='plotly_white',
@@ -2427,21 +2609,21 @@ Consultez votre tableau de bord pour plus de détails.
                             avg_forecast = forecast_df['Prévision'].mean()
                             st.metric(
                                 "💰 Prévision moyenne",
-                                f"{avg_forecast:.0f} DH",
+                                f"{avg_forecast:.2f}",
                                 delta=f"{((avg_forecast / df_product['Ventes'].mean() - 1) * 100):.1f}%"
                             )
                         
                         with col2:
                             max_forecast = forecast_df['Prévision'].max()
-                            st.metric("📈 Prévision maximale", f"{max_forecast:.0f} DH")
+                            st.metric("📈 Prévision maximale", f"{max_forecast:.2f}")
                         
                         with col3:
                             min_forecast = forecast_df['Prévision'].min()
-                            st.metric("📉 Prévision minimale", f"{min_forecast:.0f} DH")
+                            st.metric("📉 Prévision minimale", f"{min_forecast:.2f}")
                         
                         with col4:
                             total_forecast = forecast_df['Prévision'].sum()
-                            st.metric("💵 Total prévu", f"{total_forecast:.0f} DH")
+                            st.metric("💵 Total prévu", f"{total_forecast:.2f}")
                         
                         # Insights
                         st.markdown("### 💡 Insights")
@@ -2468,9 +2650,9 @@ Consultez votre tableau de bord pour plus de détails.
                         with st.expander("📋 Tableau détaillé des prévisions"):
                             display_df = forecast_df.copy()
                             display_df['Date'] = display_df['Date'].dt.strftime('%d/%m/%Y')
-                            display_df['Prévision (DH)'] = display_df['Prévision'].apply(lambda x: f"{x:.2f}")
+                            display_df['Prévision'] = display_df['Prévision'].apply(lambda x: f"{x:.2f}")
                             display_df['Jour'] = pd.to_datetime(forecast_df['Date']).dt.day_name()
-                            display_df = display_df[['Date', 'Jour', 'Prévision (DH)']]
+                            display_df = display_df[['Date', 'Jour', 'Prévision']]
                             
                             st.dataframe(display_df, use_container_width=True, hide_index=True)
                         
@@ -2490,31 +2672,31 @@ Consultez votre tableau de bord pour plus de détails.
                         
                         with col2:
                             report = f"""
-RAPPORT DE PRÉVISIONS - VentesPro Analytics
-{'='*60}
+        RAPPORT DE PRÉVISIONS - VentesPro Analytics
+        {'='*60}
 
-Produit: {produit}
-Modèle: {model_name}
-Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-Horizon: {horizon} jours
+        Catégorie: {produit}
+        Modèle: {model_name}
+        Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+        Horizon: {horizon} jours
 
-STATISTIQUES:
-- Prévision moyenne: {avg_forecast:.2f} DH
-- Prévision max: {max_forecast:.2f} DH
-- Prévision min: {min_forecast:.2f} DH
-- Total prévu: {total_forecast:.2f} DH
-- Tendance: {trend:+.2f}%
-- Volatilité: {volatility:.2f}%
+        STATISTIQUES:
+        - Prévision moyenne: {avg_forecast:.2f}
+        - Prévision max: {max_forecast:.2f}
+        - Prévision min: {min_forecast:.2f}
+        - Total prévu: {total_forecast:.2f}
+        - Tendance: {trend:+.2f}%
+        - Volatilité: {volatility:.2f}%
 
-DONNÉES HISTORIQUES:
-- Ventes moyennes: {df_product['Ventes'].mean():.2f} DH
-- Points de données: {len(df_product)}
+        DONNÉES HISTORIQUES:
+        - Moyenne historique: {df_product['Ventes'].mean():.2f}
+        - Points de données: {len(df_product)}
 
-PRÉVISIONS DÉTAILLÉES:
-{'='*60}
-"""
+        PRÉVISIONS DÉTAILLÉES:
+        {'='*60}
+        """
                             for _, row in forecast_df.iterrows():
-                                report += f"{row['Date'].strftime('%d/%m/%Y')}: {row['Prévision']:.2f} DH\n"
+                                report += f"{row['Date'].strftime('%d/%m/%Y')}: {row['Prévision']:.2f}\n"
                             
                             st.download_button(
                                 label="📄 Télécharger Rapport",
@@ -2539,9 +2721,10 @@ PRÉVISIONS DÉTAILLÉES:
                     ### 💡 Suggestions:
                     
                     1. ✅ Vérifiez d'avoir au moins 14 jours de données
-                    2. ✅ Essayez un autre modèle
-                    3. ✅ Réduisez l'horizon de prévision
-                    4. ✅ Vérifiez qu'il n'y a pas de dates dupliquées
+                    2. ✅ Essayez un autre modèle de prévision
+                    3. ✅ Réduisez l'horizon de prévision (7-30 jours)
+                    4. ✅ Vérifiez que les valeurs sont numériques et positives
+                    5. ✅ Essayez de sélectionner manuellement les colonnes dans les paramètres
                     """)
         
         # ==================== PAGE DONNÉES ====================
@@ -3266,44 +3449,29 @@ Envoyé le: {datetime.now().strftime('%d/%m/%Y à %H:%M')}
         st.error(f"❌ Erreur lors du chargement des données: {str(e)}")
         st.info("💡 Vérifiez que votre fichier respecte le format requis")
 
+
 else:
     # Page d'accueil sans fichier
-    st.markdown("""
-    <div style='text-align: center; padding: 3rem 0;'>
-        <h1 style='font-size: 3rem; margin-bottom: 1rem;'>🚀 Bienvenue sur VentesPro Analytics</h1>
-        <p style='font-size: 1.3rem; color: #e2e8f0; margin-bottom: 2rem;'>
-            Votre plateforme d'analyse et de prévision des ventes par IA
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Instructions
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.markdown("""
-        <div style='background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); 
-                    padding: 2rem; border-radius: 20px; margin: 2rem 0;'>
-            <h3 style='color: white; text-align: center; margin-bottom: 1.5rem;'>📋 Pour Commencer</h3>
-            
-            <div style='color: #e2e8f0; line-height: 2;'>
-                <p><strong>1️⃣</strong> Préparez votre fichier CSV avec les colonnes:</p>
-                <ul style='margin-left: 2rem;'>
-                    <li><code>Date</code> (format JJ/MM/AAAA)</li>
-                    <li><code>Produit</code> (nom du produit)</li>
-                    <li><code>Ventes</code> (montant en DH)</li>
-                </ul>
-                
-                <p style='margin-top: 1.5rem;'><strong>2️⃣</strong> Utilisez le séparateur <code>;</code> (point-virgule)</p>
-                
-                <p style='margin-top: 1.5rem;'><strong>3️⃣</strong> Chargez votre fichier via la sidebar ⬅️</p>
-                
-                <p style='margin-top: 1.5rem;'><strong>4️⃣</strong> Explorez les fonctionnalités!</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("## 🚀 Bienvenue sur VentesPro Analytics")
+        st.markdown("### Votre plateforme d'analyse et de prévision des ventes par IA")
         
-        st.info("💡 **Astuce**: Téléchargez notre fichier exemple dans la sidebar pour tester l'application")
+        st.info("""
+        ### 📋 Pour Commencer
+        
+        **1️⃣ Préparez votre fichier CSV**
+        - Colonnes obligatoires: `Date`, `Produit`, `Ventes`
+        - Format de date: JJ/MM/AAAA
+        - Séparateur: point-virgule (;)
+        
+        **2️⃣ Chargez votre fichier** via la sidebar ⬅️
+        
+        **3️⃣ Explorez** les fonctionnalités!
+        """)
+        
+        st.success("💡 **Astuce**: Téléchargez notre fichier exemple dans la sidebar")
 
 # Footer
 st.markdown("---")
