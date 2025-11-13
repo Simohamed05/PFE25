@@ -66,6 +66,8 @@ def define_alert_message(row, nom_utilisateur, produit, seuil_baisse, seuil_haus
     elif row['Variation'] >= seuil_hausse:
         message += f"🚀 Hausse significative détectée (seuil: {seuil_hausse}%)"
     return message
+
+
 # Configuration de la page
 st.set_page_config(
     page_title="📊 Dashboard de Prévision des Ventes",
@@ -139,6 +141,7 @@ def predict_with_xgboost(df, horizon):
 
 if uploaded_file:
     try:
+        
         df = pd.read_csv(uploaded_file, sep=";")
         
         # Vérification des colonnes obligatoires
@@ -157,6 +160,7 @@ if uploaded_file:
     except Exception as e:
         st.error(f"Erreur lors du chargement du fichier : {str(e)}")
         st.stop()
+        
 
     # Navigation
     st.sidebar.header("📌 Navigation")
@@ -527,256 +531,390 @@ if uploaded_file:
         else:
             st.markdown('<div class="alert-success">✅ Aucune alerte détectée avec les paramètres actuels</div>', unsafe_allow_html=True)
         
+    # Problème : Le code ne gère pas correctement les fréquences de dates
+# Solution : Ajouter une gestion robuste des dates
+
+# REMPLACER la section "🚀 Prédictions" par ce code amélioré :
+
     elif option == "🚀 Prédictions":
-        st.title("🚀 Prédictions des Ventes")
+        st.title("🚀 Prévisions des Ventes")
         
         # Vérification des données
         if 'Produit' not in df.columns or 'Ventes' not in df.columns:
             st.error("Colonnes requises manquantes : 'Produit' et 'Ventes' doivent être présents")
             st.stop()
         
-        # Conversion de l'index en DatetimeIndex si ce n'est pas déjà le cas
-        if not isinstance(df.index, pd.DatetimeIndex):
-            try:
-                df = df.set_index('Date')  # Essaye de définir 'Date' comme index
-                df.index = pd.to_datetime(df.index)
-            except:
-                st.error("L'index doit être une colonne de dates nommée 'Date'")
-                st.stop()
-        
+        # Configuration
         col1, col2 = st.columns(2)
         with col1:
             produit = st.selectbox("Sélectionnez un produit", df['Produit'].unique())
         with col2:
             model_type = st.selectbox("Modèle de prévision", [
-                "Auto",
                 "Prophet",
                 "Random Forest",
-                "XGBoost"
+                "XGBoost",
+                "Auto"
             ])
+        
         # Définitions des modèles
         model_definitions = {
-            "Auto": "🔍 Sélectionne automatiquement le meilleur modèle (Prophet, Random Forest ou XGBoost) en comparant leurs performances sur les données historiques.",
-            "Prophet": "📅 Modèle de séries temporelles développé par Facebook, idéal pour les données avec tendances et saisonnalités. Gère automatiquement les effets saisonniers et les jours fériés.",
-            "Random Forest": "🌳 Méthode d'ensemble basée sur des arbres de décision. Robustes aux outliers et capture bien les relations non-linéaires. Parfait pour les données complexes.",
-            "XGBoost": "⚡ Algorithme de boosting avancé, souvent plus précis que Random Forest pour les séries temporelles. Excellente performance avec des données structurées."
+            "Auto": "🔍 Sélectionne automatiquement le meilleur modèle en comparant leurs performances.",
+            "Prophet": "📅 Modèle de séries temporelles développé par Facebook, idéal pour les données avec tendances et saisonnalités.",
+            "Random Forest": "🌳 Méthode d'ensemble basée sur des arbres de décision. Robuste aux outliers.",
+            "XGBoost": "⚡ Algorithme de boosting avancé, souvent plus précis pour les séries temporelles."
         }
         
-        # Afficher la définition du modèle sélectionné
-        st.markdown(f"**{model_type}** : {model_definitions[model_type]}")
+        st.info(model_definitions[model_type])
         
-        df_product = df[df['Produit'] == produit][['Ventes']].copy()
-        
-        # Paramètre principal
+        # Horizon de prévision
         horizon = st.slider("Horizon de prévision (jours)", 7, 365, 30)
+        
+        # Filtrer les données du produit
         df_product = df[df['Produit'] == produit][['Ventes']].copy()
         
-        # Vérification des données manquantes
-        if df_product['Ventes'].isnull().sum() > 0:
-            st.warning("Valeurs manquantes détectées, interpolation linéaire appliquée")
-            df_product['Ventes'] = df_product['Ventes'].interpolate()
+        # Vérification des données
+        if len(df_product) < 10:
+            st.error(f"Pas assez de données pour {produit}. Minimum requis : 10 enregistrements")
+            st.stop()
         
+        # Afficher les statistiques du produit
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📊 Points de données", len(df_product))
+        with col2:
+            st.metric("💰 Ventes moyennes", f"{df_product['Ventes'].mean():.0f} DH")
+        with col3:
+            st.metric("📈 Tendance", f"{df_product['Ventes'].pct_change().mean()*100:.2f}%")
         
         if st.button("🔮 Lancer la Prévision"):
             with st.spinner(f"Calcul des prévisions avec {model_type}..."):
                 try:
-                    # Mode Auto - Sélection automatique du meilleur modèle
-                    if model_type == "Auto":
-                        from sklearn.metrics import mean_squared_error
-                        from xgboost import XGBRegressor
-                        from sklearn.ensemble import RandomForestRegressor
-                        from prophet import Prophet
-                        
-                        # Préparation des données
-                        df_product_auto = df_product.asfreq('D').ffill()
-                        split_index = int(len(df_product_auto) * 0.8)
-                        train = df_product_auto.iloc[:split_index]
-                        test = df_product_auto.iloc[split_index:]
-                        
-                        results = {}
-                        forecasts = {}
-                        
-                        # Test XGBoost
-                        try:
-                            train_xgb = train.reset_index()
-                            train_xgb['Jour'] = train_xgb['Date'].dt.day
-                            train_xgb['Mois'] = train_xgb['Date'].dt.month
-                            train_xgb['JourSemaine'] = train_xgb['Date'].dt.dayofweek
-                            X_train = train_xgb[['Jour', 'Mois', 'JourSemaine']]
-                            y_train = train_xgb['Ventes']
-                            
-                            test_xgb = test.reset_index()
-                            X_test = test_xgb[['Jour', 'Mois', 'JourSemaine']]
-                            y_test = test_xgb['Ventes']
-                            
-                            xgb_model = XGBRegressor(random_state=42)
-                            xgb_model.fit(X_train, y_train)
-                            xgb_pred = xgb_model.predict(X_test)
-                            results["XGBoost"] = mean_squared_error(y_test, xgb_pred, squared=False)
-                            
-                            future_dates = pd.date_range(start=df_product_auto.index[-1], periods=horizon+1, freq='D')[1:]
-                            future_X = pd.DataFrame({
-                                'Jour': future_dates.day,
-                                'Mois': future_dates.month,
-                                'JourSemaine': future_dates.dayofweek
-                            })
-                            forecasts["XGBoost"] = xgb_model.predict(future_X)
-                        except Exception as e:
-                            results["XGBoost"] = float('inf')
-                        
-                        # Test Random Forest
-                        try:
-                            rf_model = RandomForestRegressor(random_state=42)
-                            rf_model.fit(X_train, y_train)
-                            rf_pred = rf_model.predict(X_test)
-                            results["Random Forest"] = mean_squared_error(y_test, rf_pred, squared=False)
-                            forecasts["Random Forest"] = rf_model.predict(future_X)
-                        except Exception as e:
-                            results["Random Forest"] = float('inf')
-                        
-                        # Test Prophet
-                        try:
-                            prophet_train = train.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
-                            prophet_model = Prophet(daily_seasonality=True)
-                            prophet_model.fit(prophet_train)
-                            
-                            future = prophet_model.make_future_dataframe(periods=len(test)+horizon)
-                            forecast = prophet_model.predict(future)
-                            
-                            prophet_test_pred = forecast.iloc[split_index:split_index+len(test)]['yhat'].values
-                            results["Prophet"] = mean_squared_error(test['Ventes'].values, prophet_test_pred, squared=False)
-                            
-                            forecasts["Prophet"] = forecast.iloc[-horizon:]['yhat'].values
-                        except Exception as e:
-                            results["Prophet"] = float('inf')
-                        
-                        # Sélection du meilleur modèle
-                        best_model = min(results, key=results.get)
-                        st.success(f"Meilleur modèle sélectionné : {best_model} (RMSE: {results[best_model]:.2f})")
-                        
-                        future_dates = pd.date_range(start=df_product_auto.index[-1], periods=horizon+1, freq='D')[1:]
-                        forecast_df = pd.DataFrame({
-                            'Date': future_dates,
-                            'Prévision': forecasts[best_model]
-                        })
+                    # Nettoyage des données
+                    df_product = df_product.dropna()
                     
-                    # Prophet
-                    elif model_type == "Prophet":
+                    # Assurer une fréquence régulière (remplir les dates manquantes)
+                    df_product = df_product.asfreq('D', method='ffill')
+                    
+                    forecast_df = None
+                    best_model = model_type
+                    
+                    # **PROPHET**
+                    if model_type == "Prophet":
                         prophet_df = df_product.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
-                        model = Prophet(daily_seasonality=True)
-                        model.fit(prophet_df)
+                        
+                        # Supprimer les doublons de dates
+                        prophet_df = prophet_df.drop_duplicates(subset=['ds'])
+                        
+                        model = Prophet(
+                            daily_seasonality=True,
+                            yearly_seasonality=True,
+                            weekly_seasonality=True,
+                            changepoint_prior_scale=0.05
+                        )
+                        
+                        with st.spinner("Entraînement du modèle Prophet..."):
+                            model.fit(prophet_df)
+                        
                         future = model.make_future_dataframe(periods=horizon)
                         forecast = model.predict(future)
-                        forecast_df = forecast[['ds', 'yhat']].rename(columns={'ds': 'Date', 'yhat': 'Prévision'})
-                        forecast_df = forecast_df.tail(horizon)
+                        
+                        # Garder uniquement les prévisions futures
+                        forecast_df = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(horizon)
+                        forecast_df = forecast_df.rename(columns={
+                            'ds': 'Date', 
+                            'yhat': 'Prévision',
+                            'yhat_lower': 'Borne_Inférieure',
+                            'yhat_upper': 'Borne_Supérieure'
+                        })
                     
-                    # Random Forest
+                    # **RANDOM FOREST**
                     elif model_type == "Random Forest":
-                        from sklearn.ensemble import RandomForestRegressor
-                        
                         df_features = df_product.reset_index()
-                        df_features['Jour'] = df_features['Date'].dt.day
-                        df_features['Mois'] = df_features['Date'].dt.month
-                        df_features['JourSemaine'] = df_features['Date'].dt.dayofweek
-                        df_features['Trimestre'] = df_features['Date'].dt.quarter
+                        df_features['Jour'] = df_features.index.day
+                        df_features['Mois'] = df_features.index.month
+                        df_features['JourSemaine'] = df_features.index.dayofweek
+                        df_features['JourAnnee'] = df_features.index.dayofyear
+                        df_features['Trimestre'] = df_features.index.quarter
                         
-                        X = df_features[['Jour', 'Mois', 'JourSemaine', 'Trimestre']]
+                        # Ajouter une variable temporelle
+                        df_features['Temps'] = range(len(df_features))
+                        
+                        X = df_features[['Jour', 'Mois', 'JourSemaine', 'JourAnnee', 'Trimestre', 'Temps']]
                         y = df_features['Ventes']
                         
-                        model = RandomForestRegressor(n_estimators=100, random_state=42)
-                        model.fit(X, y)
+                        model = RandomForestRegressor(
+                            n_estimators=200,
+                            max_depth=10,
+                            random_state=42,
+                            n_jobs=-1
+                        )
                         
-                        future_dates = pd.date_range(start=df_features['Date'].iloc[-1], periods=horizon+1, freq='D')[1:]
+                        with st.spinner("Entraînement du modèle Random Forest..."):
+                            model.fit(X, y)
+                        
+                        # Créer les features pour le futur
+                        last_date = df_features.index[-1]
+                        future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
+                        
                         future_X = pd.DataFrame({
                             'Jour': future_dates.day,
                             'Mois': future_dates.month,
                             'JourSemaine': future_dates.dayofweek,
-                            'Trimestre': future_dates.quarter
+                            'JourAnnee': future_dates.dayofyear,
+                            'Trimestre': future_dates.quarter,
+                            'Temps': range(len(df_features), len(df_features) + horizon)
                         })
                         
                         forecast = model.predict(future_X)
-                        forecast_df = pd.DataFrame({'Date': future_dates, 'Prévision': forecast})
+                        forecast_df = pd.DataFrame({
+                            'Date': future_dates,
+                            'Prévision': forecast
+                        })
                     
-                    # XGBoost
+                    # **XGBOOST**
                     elif model_type == "XGBoost":
                         from xgboost import XGBRegressor
                         
                         df_features = df_product.reset_index()
-                        df_features['Jour'] = df_features['Date'].dt.day
-                        df_features['Mois'] = df_features['Date'].dt.month
-                        df_features['JourSemaine'] = df_features['Date'].dt.dayofweek
-                        df_features['Trimestre'] = df_features['Date'].dt.quarter
+                        df_features['Jour'] = df_features.index.day
+                        df_features['Mois'] = df_features.index.month
+                        df_features['JourSemaine'] = df_features.index.dayofweek
+                        df_features['JourAnnee'] = df_features.index.dayofyear
+                        df_features['Trimestre'] = df_features.index.quarter
+                        df_features['Temps'] = range(len(df_features))
                         
-                        X = df_features[['Jour', 'Mois', 'JourSemaine', 'Trimestre']]
+                        X = df_features[['Jour', 'Mois', 'JourSemaine', 'JourAnnee', 'Trimestre', 'Temps']]
                         y = df_features['Ventes']
                         
-                        model = XGBRegressor(random_state=42)
-                        model.fit(X, y)
+                        model = XGBRegressor(
+                            n_estimators=200,
+                            max_depth=6,
+                            learning_rate=0.1,
+                            random_state=42,
+                            n_jobs=-1
+                        )
                         
-                        future_dates = pd.date_range(start=df_features['Date'].iloc[-1], periods=horizon+1, freq='D')[1:]
+                        with st.spinner("Entraînement du modèle XGBoost..."):
+                            model.fit(X, y)
+                        
+                        last_date = df_features.index[-1]
+                        future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
+                        
                         future_X = pd.DataFrame({
                             'Jour': future_dates.day,
                             'Mois': future_dates.month,
                             'JourSemaine': future_dates.dayofweek,
-                            'Trimestre': future_dates.quarter
+                            'JourAnnee': future_dates.dayofyear,
+                            'Trimestre': future_dates.quarter,
+                            'Temps': range(len(df_features), len(df_features) + horizon)
                         })
                         
                         forecast = model.predict(future_X)
-                        forecast_df = pd.DataFrame({'Date': future_dates, 'Prévision': forecast})
+                        forecast_df = pd.DataFrame({
+                            'Date': future_dates,
+                            'Prévision': forecast
+                        })
                     
-                    # Affichage des résultats
-                    st.success("Prévisions terminées avec succès!")
+                    # **MODE AUTO**
+                    elif model_type == "Auto":
+                        from sklearn.metrics import mean_absolute_error, mean_squared_error
+                        
+                        # Préparer les données
+                        df_clean = df_product.asfreq('D', method='ffill')
+                        split_idx = int(len(df_clean) * 0.8)
+                        train = df_clean.iloc[:split_idx]
+                        test = df_clean.iloc[split_idx:]
+                        
+                        results = {}
+                        forecasts_dict = {}
+                        
+                        st.info("🔄 Test de 3 modèles en cours...")
+                        
+                        # Test Prophet
+                        try:
+                            with st.spinner("Test Prophet..."):
+                                prophet_train = train.reset_index().rename(columns={'Date': 'ds', 'Ventes': 'y'})
+                                prophet_train = prophet_train.drop_duplicates(subset=['ds'])
+                                
+                                m = Prophet(daily_seasonality=True)
+                                m.fit(prophet_train)
+                                
+                                future = m.make_future_dataframe(periods=len(test)+horizon)
+                                forecast_prophet = m.predict(future)
+                                
+                                pred_test = forecast_prophet.iloc[split_idx:split_idx+len(test)]['yhat'].values
+                                mae = mean_absolute_error(test['Ventes'].values, pred_test)
+                                results["Prophet"] = mae
+                                
+                                forecasts_dict["Prophet"] = forecast_prophet.tail(horizon)[['ds', 'yhat']].rename(
+                                    columns={'ds': 'Date', 'yhat': 'Prévision'}
+                                )
+                                st.success(f"✅ Prophet - MAE: {mae:.2f}")
+                        except Exception as e:
+                            st.warning(f"⚠️ Prophet échoué: {str(e)}")
+                            results["Prophet"] = float('inf')
+                        
+                        # Test Random Forest
+                        try:
+                            with st.spinner("Test Random Forest..."):
+                                df_rf = df_clean.reset_index()
+                                df_rf['Temps'] = range(len(df_rf))
+                                df_rf['Jour'] = df_rf.index.day
+                                df_rf['Mois'] = df_rf.index.month
+                                df_rf['JourSemaine'] = df_rf.index.dayofweek
+                                
+                                X_train = df_rf.iloc[:split_idx][['Temps', 'Jour', 'Mois', 'JourSemaine']]
+                                y_train = df_rf.iloc[:split_idx]['Ventes']
+                                X_test = df_rf.iloc[split_idx:][['Temps', 'Jour', 'Mois', 'JourSemaine']]
+                                y_test = df_rf.iloc[split_idx:]['Ventes']
+                                
+                                rf = RandomForestRegressor(n_estimators=100, random_state=42)
+                                rf.fit(X_train, y_train)
+                                
+                                pred_test = rf.predict(X_test)
+                                mae = mean_absolute_error(y_test, pred_test)
+                                results["Random Forest"] = mae
+                                
+                                # Prévision future
+                                last_date = df_rf.index[-1]
+                                future_dates = pd.date_range(start=last_date, periods=horizon+1, freq='D')[1:]
+                                future_X = pd.DataFrame({
+                                    'Temps': range(len(df_rf), len(df_rf) + horizon),
+                                    'Jour': future_dates.day,
+                                    'Mois': future_dates.month,
+                                    'JourSemaine': future_dates.dayofweek
+                                })
+                                
+                                forecasts_dict["Random Forest"] = pd.DataFrame({
+                                    'Date': future_dates,
+                                    'Prévision': rf.predict(future_X)
+                                })
+                                st.success(f"✅ Random Forest - MAE: {mae:.2f}")
+                        except Exception as e:
+                            st.warning(f"⚠️ Random Forest échoué: {str(e)}")
+                            results["Random Forest"] = float('inf')
+                        
+                        # Test XGBoost
+                        try:
+                            with st.spinner("Test XGBoost..."):
+                                from xgboost import XGBRegressor
+                                
+                                xgb = XGBRegressor(n_estimators=100, random_state=42)
+                                xgb.fit(X_train, y_train)
+                                
+                                pred_test = xgb.predict(X_test)
+                                mae = mean_absolute_error(y_test, pred_test)
+                                results["XGBoost"] = mae
+                                
+                                forecasts_dict["XGBoost"] = pd.DataFrame({
+                                    'Date': future_dates,
+                                    'Prévision': xgb.predict(future_X)
+                                })
+                                st.success(f"✅ XGBoost - MAE: {mae:.2f}")
+                        except Exception as e:
+                            st.warning(f"⚠️ XGBoost échoué: {str(e)}")
+                            results["XGBoost"] = float('inf')
+                        
+                        # Sélectionner le meilleur
+                        if results:
+                            best_model = min(results, key=results.get)
+                            st.success(f"🏆 Meilleur modèle : **{best_model}** (MAE: {results[best_model]:.2f})")
+                            forecast_df = forecasts_dict[best_model]
+                        else:
+                            st.error("Tous les modèles ont échoué")
+                            st.stop()
                     
-                    # Graphique
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                    x=df_product.index,
-                    y=df_product['Ventes'],
-                    mode='lines',
-                    name='Historique',
-                    line=dict(color='#1f77b4', width=2)  # Bleu
-                    ))
-                    
-                    # Prévisions en ROUGE (#d62728 est le rouge standard de Plotly)
-                    fig.add_trace(go.Scatter(
-                        x=forecast_df['Date'],
-                        y=forecast_df['Prévision'],
-                        mode='lines+markers',
-                        name='Prévisions',
-                        line=dict(color='#d62728', width=2, dash='dot')  # Rouge
-                    ))
-                    
-                    fig.update_layout(
-                        title=f"Prévisions des ventes pour {produit} ({model_type})",
-                        xaxis_title='Date',
-                        yaxis_title='Ventes',
-                        hovermode='x unified',
-                        legend=dict(
-                            orientation="h",
-                            yanchor="bottom",
-                            y=1.02,
-                            xanchor="right",
-                            x=1
+                    # **AFFICHAGE DES RÉSULTATS**
+                    if forecast_df is not None:
+                        st.success("✅ Prévisions générées avec succès!")
+                        
+                        # Graphique
+                        fig = go.Figure()
+                        
+                        # Historique
+                        fig.add_trace(go.Scatter(
+                            x=df_product.index,
+                            y=df_product['Ventes'],
+                            mode='lines',
+                            name='Historique',
+                            line=dict(color='#1f77b4', width=2)
+                        ))
+                        
+                        # Prévisions
+                        fig.add_trace(go.Scatter(
+                            x=forecast_df['Date'],
+                            y=forecast_df['Prévision'],
+                            mode='lines+markers',
+                            name=f'Prévisions ({best_model})',
+                            line=dict(color='#d62728', width=2, dash='dot'),
+                            marker=dict(size=6)
+                        ))
+                        
+                        # Intervalles de confiance (si disponible pour Prophet)
+                        if 'Borne_Inférieure' in forecast_df.columns:
+                            fig.add_trace(go.Scatter(
+                                x=forecast_df['Date'],
+                                y=forecast_df['Borne_Supérieure'],
+                                mode='lines',
+                                line=dict(width=0),
+                                showlegend=False
+                            ))
+                            fig.add_trace(go.Scatter(
+                                x=forecast_df['Date'],
+                                y=forecast_df['Borne_Inférieure'],
+                                mode='lines',
+                                line=dict(width=0),
+                                fillcolor='rgba(214, 39, 40, 0.2)',
+                                fill='tonexty',
+                                name='Intervalle de confiance'
+                            ))
+                        
+                        fig.update_layout(
+                            title=f"Prévisions des ventes - {produit} ({best_model})",
+                            xaxis_title='Date',
+                            yaxis_title='Ventes (DH)',
+                            hovermode='x unified',
+                            height=500
                         )
-                    )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Statistiques des prévisions
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("📊 Prévision moyenne", f"{forecast_df['Prévision'].mean():.0f} DH")
+                        with col2:
+                            st.metric("📈 Prévision max", f"{forecast_df['Prévision'].max():.0f} DH")
+                        with col3:
+                            variation = ((forecast_df['Prévision'].mean() - df_product['Ventes'].mean()) / df_product['Ventes'].mean()) * 100
+                            st.metric("📊 Variation vs historique", f"{variation:+.1f}%")
+                        
+                        # Tableau des prévisions
+                        with st.expander("📋 Voir le tableau des prévisions"):
+                            st.dataframe(
+                                forecast_df.style.format({'Prévision': '{:.0f} DH'}),
+                                use_container_width=True
+                            )
+                        
+                        # Téléchargement
+                        csv = forecast_df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="💾 Télécharger les prévisions (CSV)",
+                            data=csv,
+                            file_name=f"previsions_{produit}_{best_model}_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv"
+                        )
                     
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Téléchargement
-                    csv = forecast_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="💾 Télécharger les prévisions (CSV)",
-                        data=csv,
-                        file_name=f"previsions_{produit}_{model_type}.csv",
-                        mime="text/csv"
-                    )
-                
                 except Exception as e:
-                    st.error(f"Erreur lors de la prévision : {str(e)}")
-                    st.error("Veuillez vérifier :")
-                    st.error("- Que vos données contiennent bien des dates valides")
-                    st.error("- Qu'il n'y a pas de valeurs manquantes")
-                    st.error("- Que vous avez suffisamment de données historiques")
+                    st.error(f"❌ Erreur lors de la prévision : {str(e)}")
+                    with st.expander("🔍 Détails de l'erreur"):
+                        st.code(str(e))
+                    st.info("""
+                    **Suggestions :**
+                    - Vérifiez que vos données contiennent suffisamment d'historique (minimum 30 jours)
+                    - Assurez-vous qu'il n'y a pas de valeurs aberrantes extrêmes
+                    - Essayez un autre modèle de prévision
+                    """)
     ### Téléchargement d'un Exemple
      # Section Données brutes
     elif option == "📂 Données Brutes":
