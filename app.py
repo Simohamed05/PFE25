@@ -63,104 +63,99 @@ st.set_page_config(
 )
 
 # ==================== STYLES CSS PERSONNALISÉS ====================
+# ==================== STYLES CSS ADAPTATIFS (Mode Sombre/Clair) ====================
 st.markdown("""
 <style>
     /* Import Google Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
-    
-    /* Variables CSS */
-    :root {
-        --primary-color: #6366f1;
-        --secondary-color: #8b5cf6;
-        --accent-color: #ec4899;
-        --success-color: #10b981;
-        --warning-color: #f59e0b;
-        --danger-color: #ef4444;
-        --dark-bg: #1e293b;
-        --light-bg: #f8fafc;
-        --card-bg: #ffffff;
-        --text-primary: #1e293b;
-        --text-secondary: #64748b;
-        --border-color: #e2e8f0;
-    }
     
     /* Global Styles */
     * {
         font-family: 'Poppins', sans-serif;
     }
     
-    /* Main Container */
+    /* Main Container - Adaptatif */
     .main {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
         padding: 2rem;
     }
     
-    /* Sidebar Styling */
+    /* Sidebar - Toujours sombre */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-        box-shadow: 4px 0 12px rgba(0,0,0,0.1);
+        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
     }
     
-    [data-testid="stSidebar"] .css-1d391kg {
-        padding-top: 2rem;
+    [data-testid="stSidebar"] * {
+        color: #e2e8f0 !important;
     }
     
-    /* Title Styling */
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #e2e8f0 !important;
+    }
+    
+    /* Titres - Adaptatifs */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Poppins', sans-serif !important;
+        font-weight: 600 !important;
+    }
+    
     h1 {
-        color: #ffffff !important;
-        font-weight: 700 !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         text-align: center;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        margin-bottom: 2rem !important;
         font-size: 2.5rem !important;
+        margin-bottom: 1rem !important;
     }
     
     h2 {
-        color: #1e293b !important;
-        font-weight: 600 !important;
-        border-bottom: 3px solid var(--primary-color);
+        color: #6366f1 !important;
+        border-bottom: 3px solid #6366f1;
         padding-bottom: 0.5rem;
         margin-top: 2rem !important;
     }
     
     h3 {
-        color: var(--primary-color) !important;
-        font-weight: 600 !important;
+        color: #8b5cf6 !important;
     }
     
-    /* Card Styling */
+    /* Cards - Adaptatifs selon le thème */
     .stCard {
-        background: var(--card-bg);
+        background: var(--background-color);
         border-radius: 16px;
         padding: 1.5rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-        border: 1px solid var(--border-color);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border: 1px solid rgba(99, 102, 241, 0.2);
         transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
     
     .stCard:hover {
         transform: translateY(-5px);
-        box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+        box-shadow: 0 12px 24px rgba(99, 102, 241, 0.2);
     }
     
-    /* Metric Cards */
+    /* Metric Cards - Adaptatifs */
     [data-testid="stMetricValue"] {
         font-size: 2rem !important;
         font-weight: 700 !important;
-        color: var(--primary-color) !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
     
     [data-testid="stMetricLabel"] {
         font-size: 0.9rem !important;
         font-weight: 500 !important;
-        color: var(--text-secondary) !important;
+        opacity: 0.8;
     }
     
-    /* Buttons */
+    /* Buttons - Toujours visibles */
     .stButton>button {
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-        color: white;
-        border: none;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+        color: white !important;
+        border: none !important;
         border-radius: 12px;
         padding: 0.75rem 2rem;
         font-weight: 600;
@@ -172,68 +167,76 @@ st.markdown("""
     .stButton>button:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
-        background: linear-gradient(135deg, var(--secondary-color) 0%, var(--primary-color) 100%);
     }
     
-    /* Input Fields */
+    /* Input Fields - Adaptatifs */
     .stTextInput>div>div>input,
     .stSelectbox>div>div>select,
-    .stNumberInput>div>div>input {
+    .stNumberInput>div>div>input,
+    .stTextArea>div>div>textarea {
         border-radius: 10px;
-        border: 2px solid var(--border-color);
+        border: 2px solid rgba(99, 102, 241, 0.3) !important;
         padding: 0.75rem;
         font-size: 1rem;
         transition: border-color 0.3s ease;
+        background-color: transparent !important;
     }
     
     .stTextInput>div>div>input:focus,
     .stSelectbox>div>div>select:focus,
-    .stNumberInput>div>div>input:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    .stNumberInput>div>div>input:focus,
+    .stTextArea>div>div>textarea:focus {
+        border-color: #6366f1 !important;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
     }
     
-    /* Tabs */
+    /* Tabs - Adaptatifs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
     }
     
     .stTabs [data-baseweb="tab"] {
-        background-color: rgba(255, 255, 255, 0.1);
+        background-color: rgba(99, 102, 241, 0.1);
         border-radius: 10px;
         padding: 0.75rem 1.5rem;
-        color: white;
         font-weight: 500;
         transition: all 0.3s ease;
+        border: 2px solid transparent;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: rgba(255, 255, 255, 0.2);
+        background-color: rgba(99, 102, 241, 0.2);
+        border-color: rgba(99, 102, 241, 0.3);
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
         color: white !important;
+        border-color: transparent !important;
     }
     
-    /* Expander */
+    /* Expander - Adaptatif */
     .streamlit-expanderHeader {
         background: linear-gradient(90deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
         border-radius: 10px;
         font-weight: 600;
-        color: var(--primary-color);
         padding: 1rem;
+        border: 1px solid rgba(99, 102, 241, 0.2);
     }
     
-    /* DataFrames */
+    .streamlit-expanderHeader:hover {
+        background: linear-gradient(90deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+    }
+    
+    /* DataFrames - Adaptatifs */
     .dataframe {
         border-radius: 10px;
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
-    /* Alerts */
+    /* Alerts - Adaptatifs avec contraste */
     .stAlert {
         border-radius: 12px;
         border-left: 4px solid;
@@ -241,98 +244,40 @@ st.markdown("""
         font-weight: 500;
     }
     
+    /* Success Alert */
+    div[data-baseweb="notification"][kind="success"] {
+        background-color: rgba(16, 185, 129, 0.15) !important;
+        border-left-color: #10b981 !important;
+    }
+    
+    /* Info Alert */
+    div[data-baseweb="notification"][kind="info"] {
+        background-color: rgba(59, 130, 246, 0.15) !important;
+        border-left-color: #3b82f6 !important;
+    }
+    
+    /* Warning Alert */
+    div[data-baseweb="notification"][kind="warning"] {
+        background-color: rgba(245, 158, 11, 0.15) !important;
+        border-left-color: #f59e0b !important;
+    }
+    
+    /* Error Alert */
+    div[data-baseweb="notification"][kind="error"] {
+        background-color: rgba(239, 68, 68, 0.15) !important;
+        border-left-color: #ef4444 !important;
+    }
+    
     /* Progress Bar */
     .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
         border-radius: 10px;
-    }
-    
-    /* Success Messages */
-    .success-box {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-        margin: 1rem 0;
-        font-weight: 500;
-    }
-    
-    /* Warning Messages */
-    .warning-box {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-        margin: 1rem 0;
-        font-weight: 500;
-    }
-    
-    /* Info Messages */
-    .info-box {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        margin: 1rem 0;
-        font-weight: 500;
-    }
-    
-    /* Loading Animation */
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    
-    .stSpinner > div {
-        border-color: var(--primary-color) !important;
-        animation: pulse 1.5s ease-in-out infinite;
-    }
-    
-    /* Hide Streamlit Branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-        border-radius: 10px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: var(--secondary-color);
-    }
-    
-    /* Sidebar Menu Items */
-    [data-testid="stSidebar"] .css-1d391kg p {
-        color: #e2e8f0 !important;
-        font-weight: 500;
-    }
-    
-    /* File Uploader */
-    [data-testid="stFileUploader"] {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        padding: 1.5rem;
-        border: 2px dashed rgba(255, 255, 255, 0.3);
     }
     
     /* Download Button */
     .stDownloadButton>button {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: white;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        color: white !important;
         border-radius: 10px;
         padding: 0.75rem 1.5rem;
         font-weight: 600;
@@ -343,6 +288,191 @@ st.markdown("""
     .stDownloadButton>button:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.05);
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #6366f1 0%, #8b5cf6 100%);
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #8b5cf6;
+    }
+    
+    /* File Uploader - Adaptatif */
+    [data-testid="stFileUploader"] {
+        background: rgba(99, 102, 241, 0.05);
+        border-radius: 12px;
+        padding: 1.5rem;
+        border: 2px dashed rgba(99, 102, 241, 0.3);
+    }
+    
+    [data-testid="stFileUploader"]:hover {
+        border-color: rgba(99, 102, 241, 0.5);
+        background: rgba(99, 102, 241, 0.08);
+    }
+    
+    /* Radio Buttons - Adaptatifs */
+    .stRadio > label {
+        background: rgba(99, 102, 241, 0.05);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .stRadio > label:hover {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: rgba(99, 102, 241, 0.3);
+    }
+    
+    /* Checkbox - Adaptatif */
+    .stCheckbox {
+        padding: 0.5rem;
+        border-radius: 8px;
+    }
+    
+    .stCheckbox:hover {
+        background: rgba(99, 102, 241, 0.05);
+    }
+    
+    /* Slider - Coloré */
+    .stSlider [role="slider"] {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    }
+    
+    .stSlider [data-baseweb="slider"] {
+        background: rgba(99, 102, 241, 0.2) !important;
+    }
+    
+    /* Spinner - Coloré */
+    .stSpinner > div {
+        border-top-color: #6366f1 !important;
+        border-right-color: #8b5cf6 !important;
+    }
+    
+    /* Markdown Links - Adaptatifs */
+    a {
+        color: #6366f1 !important;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.3s ease;
+    }
+    
+    a:hover {
+        color: #8b5cf6 !important;
+        text-decoration: underline;
+    }
+    
+    /* Code Blocks - Adaptatifs */
+    code {
+        background: rgba(99, 102, 241, 0.1) !important;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+    
+    pre {
+        background: rgba(99, 102, 241, 0.05) !important;
+        border-radius: 8px;
+        padding: 1rem;
+        border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+    
+    /* Info/Warning/Success Boxes personnalisées */
+    .info-box {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%);
+        border-left: 4px solid #3b82f6;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin: 1rem 0;
+        font-weight: 500;
+    }
+    
+    .success-box {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+        border-left: 4px solid #10b981;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin: 1rem 0;
+        font-weight: 500;
+    }
+    
+    .warning-box {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.15) 100%);
+        border-left: 4px solid #f59e0b;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin: 1rem 0;
+        font-weight: 500;
+    }
+    
+    .error-box {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
+        border-left: 4px solid #ef4444;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin: 1rem 0;
+        font-weight: 500;
+    }
+    
+    /* Tableau personnalisé */
+    table {
+        border-collapse: collapse;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    thead tr {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: white !important;
+    }
+    
+    thead th {
+        color: white !important;
+        font-weight: 600;
+        padding: 1rem;
+    }
+    
+    tbody tr:nth-child(even) {
+        background: rgba(99, 102, 241, 0.05);
+    }
+    
+    tbody tr:hover {
+        background: rgba(99, 102, 241, 0.1);
+        transition: background 0.3s ease;
+    }
+    
+    /* Hide Streamlit Branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        h1 {
+            font-size: 2rem !important;
+        }
+        
+        .stCard {
+            padding: 1rem;
+        }
+        
+        [data-testid="stMetricValue"] {
+            font-size: 1.5rem !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -556,16 +686,12 @@ if uploaded_file:
             # Hero Section
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                st.markdown("""
-                <div style='background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); 
-                            padding: 2rem; border-radius: 20px; text-align: center; margin: 2rem 0;'>
-                    <h2 style='color: white; margin-bottom: 1rem;'>🎯 Bienvenue sur VentesPro Analytics</h2>
-                    <p style='color: #e2e8f0; font-size: 1.1rem; line-height: 1.6;'>
+                st.info("""
+                        ### 🎯 Bienvenue sur VentesPro Analytics
+
                         Transformez vos données de ventes en insights actionnables avec notre 
                         plateforme d'analyse avancée et de prévision par IA.
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
+                        """)
             
             # KPIs Principaux
             st.markdown("### 📊 Vue d'ensemble")
@@ -573,14 +699,8 @@ if uploaded_file:
             
             with col1:
                 total_ventes = df['Ventes'].sum()
-                st.markdown(f"""
-                <div class='stCard' style='text-align: center;'>
-                    <h3 style='color: #6366f1; margin-bottom: 0.5rem;'>💰</h3>
-                    <h2 style='color: #1e293b; margin: 0;'>{total_ventes:,.0f} DH</h2>
-                    <p style='color: #64748b; margin: 0.5rem 0 0 0;'>Ventes Totales</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
+                st.metric("💰 Ventes Totales", f"{total_ventes:,.0f} DH")
+                
             with col2:
                 nb_produits = df['Produit'].nunique()
                 st.markdown(f"""
