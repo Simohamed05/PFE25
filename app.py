@@ -748,7 +748,7 @@ if os.path.exists(historical_data_file):
             data=f,
             file_name='exemple_historique.csv',
             mime='text/csv',
-            use_container_width=True
+            width=True
         )
 
 if uploaded_file:
@@ -1000,7 +1000,7 @@ if uploaded_file:
                 showlegend=True
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width=True)
             
             # Guide de démarrage rapide
             st.markdown("---")
@@ -1128,7 +1128,7 @@ if uploaded_file:
                     template='plotly_white'
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width=True)
                 
                 # Performance par catégorie
                 if cat_col != "Aucune":
@@ -1157,7 +1157,7 @@ if uploaded_file:
                             'Min': '{:,.0f}',
                             'Croissance': '{:+.2f}%'
                         }).background_gradient(subset=['Total'], cmap='Blues'),
-                        use_container_width=True,
+                        width=True,
                         hide_index=True
                     )
             
@@ -1207,7 +1207,7 @@ if uploaded_file:
                             template='plotly_white'
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width=True)
                     
                     # Comparaison entre régions
                     st.markdown("### 🗺️ Comparaison entre Régions")
@@ -1222,7 +1222,7 @@ if uploaded_file:
                             'Moyenne': '{:,.0f}',
                             'Transactions': '{:,.0f}'
                         }).background_gradient(cmap='RdYlGn'),
-                        use_container_width=True
+                        width=True
                     )
                 else:
                     st.info("📌 Pas de colonne 'Region' dans les données")
@@ -1267,7 +1267,7 @@ if uploaded_file:
                             template='plotly_white'
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width=True)
                     
                     with col2:
                         #  Calcul du lift promotionnel (robuste)
@@ -1328,7 +1328,7 @@ if uploaded_file:
                         template='plotly_white'
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
                 else:
                     st.info("📌 Pas de colonne 'Promo' dans les données")
             
@@ -1373,7 +1373,7 @@ if uploaded_file:
                     )
                     
                     fig.update_layout(height=600, template='plotly_white', showlegend=True)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
                     
                     # Alertes de stock
                     st.markdown("### ⚠️ Alertes de Stock")
@@ -1420,7 +1420,7 @@ if uploaded_file:
                             title='Relation Stock-Valeurs'
                         )
                         fig.update_layout(height=300, template='plotly_white')
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width=True)
                 else:
                     st.info("📌 Pas de colonne 'Stock' dans les données")
             
@@ -1460,7 +1460,7 @@ if uploaded_file:
                     template='plotly_white'
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width=True)
                 
                 # Valeurs par jour de la semaine
                 st.markdown("### 📆 Valeurs par Jour de la Semaine")
@@ -1487,7 +1487,7 @@ if uploaded_file:
                     template='plotly_white'
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width=True)
                 
                 # Heatmap saisonnière
                 st.markdown("### 🔥 Carte de Chaleur Saisonnière")
@@ -1519,7 +1519,7 @@ if uploaded_file:
                     template='plotly_white'
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width=True)
                 
                 # Insights saisonniers
                 st.markdown("### 💡 Insights Saisonniers")
@@ -1568,7 +1568,7 @@ if uploaded_file:
                         })
                         st.dataframe(
                             stats_df.style.format({'Valeur': '{:,.2f}'}),
-                            use_container_width=True,
+                            width=True,
                             hide_index=True
                         )
                     
@@ -1593,7 +1593,7 @@ if uploaded_file:
                             template='plotly_white'
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width=True)
                     
                     # Évolution temporelle
                     st.markdown(f"#### 📈 Évolution de {variable}")
@@ -1627,7 +1627,7 @@ if uploaded_file:
                         template='plotly_white'
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
                     
                     # Boxplot par catégorie
                     if cat_col != "Aucune":
@@ -1649,7 +1649,7 @@ if uploaded_file:
                             template='plotly_white'
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width=True)
                 else:
                     st.warning("Aucune variable numérique disponible pour l'analyse")
             
@@ -1680,7 +1680,7 @@ if uploaded_file:
                         template='plotly_white'
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
                     
                     # Top corrélations
                     st.markdown("#### 🔝 Top Corrélations")
@@ -1706,7 +1706,7 @@ if uploaded_file:
                         st.dataframe(
                             positive.style.format({'Corrélation': '{:.3f}'})
                             .background_gradient(subset=['Corrélation'], cmap='Greens'),
-                            use_container_width=True,
+                            width=True,
                             hide_index=True
                         )
                     
@@ -1716,7 +1716,7 @@ if uploaded_file:
                         st.dataframe(
                             negative.style.format({'Corrélation': '{:.3f}'})
                             .background_gradient(subset=['Corrélation'], cmap='Reds'),
-                            use_container_width=True,
+                            width=True,
                             hide_index=True
                         )
                     
@@ -1737,7 +1737,7 @@ if uploaded_file:
                     )
                     
                     fig.update_layout(height=500, template='plotly_white')
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
                     
                     # Coefficient de corrélation
                     corr_value = df[var1].corr(df[var2])
@@ -1785,7 +1785,7 @@ if uploaded_file:
                     template='plotly_white'
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width=True)
             
             with tab4:
                 st.markdown("### 🎯 Analyse Prédictive")
@@ -1824,7 +1824,7 @@ if uploaded_file:
                     template='plotly_white'
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width=True)
         
         # ==================== PAGE ALERTES ====================
         with tab_alerts:
@@ -1875,7 +1875,7 @@ if uploaded_file:
                         step=5.0
                     )
                 
-                submitted = st.form_submit_button("✅ Activer les Alertes", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("✅ Activer les Alertes", type="primary", width=True)
                 
                 if submitted:
                     if nom and email:
@@ -1928,7 +1928,7 @@ L'équipe VentesPRO
             st.markdown("---")
             st.markdown("### 🚨 Détection en Temps Réel")
             
-            if st.button("🔍 Vérifier les Alertes Maintenant", use_container_width=True):
+            if st.button("🔍 Vérifier les Alertes Maintenant", width=True):
                 with st.spinner("Analyse en cours..."):
                     last_two = df[target_col].tail(2)
                     if len(last_two) == 2:
@@ -1949,7 +1949,7 @@ L'équipe VentesPRO
                 'Variation': [5.2, -8.1, 12.3, -3.4, 7.5],
                 'Message': ['Hausse modérée', 'Baisse significative', 'Forte hausse', 'Légère baisse', 'Hausse positive']
             })
-            st.dataframe(alertes_exemple, use_container_width=True)
+            st.dataframe(alertes_exemple, width=True)
         
         # ==================== PAGE PRÉVISIONS ====================
         with tab_forecast:
@@ -2103,7 +2103,7 @@ L'équipe VentesPRO
             # -----------------------------
             # Action
             # -----------------------------
-            if st.button("🔮 Générer les Prévisions", type="primary", use_container_width=True):
+            if st.button("🔮 Générer les Prévisions", type="primary", width=True):
                 status_text = st.empty()
                 progress_bar = st.progress(0)
 
@@ -2450,7 +2450,7 @@ L'équipe VentesPRO
 
                         st.success(f"🏆 Meilleur modèle : **{best_model}**")
                         st.markdown("### 📊 Comparaison des modèles")
-                        st.dataframe(comparison_df.style.format({"MAE": "{:.2f}", "RMSE": "{:.2f}"}), use_container_width=True)
+                        st.dataframe(comparison_df.style.format({"MAE": "{:.2f}", "RMSE": "{:.2f}"}), width=True)
 
                         forecast_df = forecasts_dict[best_model]
                         model_name = best_model
@@ -2516,7 +2516,7 @@ L'équipe VentesPRO
                         legend=dict(orientation="h", y=1.02, x=1, xanchor="right", yanchor="bottom")
                     )
 
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
 
                     # Stats
                     st.markdown("### 📊 Statistiques des Prévisions")
@@ -2561,7 +2561,7 @@ L'équipe VentesPRO
                         display_df = forecast_df.copy()
                         display_df["Date"] = pd.to_datetime(display_df["Date"]).dt.strftime("%d/%m/%Y")
                         display_df["Prévision"] = display_df["Prévision"].astype(float).round(2)
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        st.dataframe(display_df, width=True, hide_index=True)
 
                     # Downloads
                     st.markdown('<div id=\"telechargements\"></div>', unsafe_allow_html=True)
@@ -2575,7 +2575,7 @@ L'équipe VentesPRO
                             data=csv,
                             file_name=f"previsions_{produit}_{model_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                             mime="text/csv",
-                            use_container_width=True
+                            width=True
                         )
 
                     with colB:
@@ -2611,7 +2611,7 @@ L'équipe VentesPRO
                             data=report,
                             file_name=f"rapport_{produit}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                             mime="text/plain",
-                            use_container_width=True
+                            width=True
                         )
 
                 except Exception as e:
@@ -2702,7 +2702,7 @@ L'équipe VentesPRO
             
             st.dataframe(
                 df_display,
-                use_container_width=True,
+                width=True,
                 hide_index=not show_index
             )
             
@@ -2719,7 +2719,7 @@ L'équipe VentesPRO
                     data=csv,
                     file_name=f"donnees_filtrees_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width=True
                 )
             
             with col2:
@@ -2735,7 +2735,7 @@ L'équipe VentesPRO
                         data=buffer.getvalue(),
                         file_name=f"donnees_filtrees_{datetime.now().strftime('%Y%m%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
+                        width=True
                     )
                 except:
                     st.info("Export Excel non disponible")
@@ -2748,7 +2748,7 @@ L'équipe VentesPRO
                     data=json_str,
                     file_name=f"donnees_filtrees_{datetime.now().strftime('%Y%m%d')}.json",
                     mime="application/json",
-                    use_container_width=True
+                    width=True
                 )
             
             # Analyse rapide
@@ -2760,7 +2760,7 @@ L'équipe VentesPRO
             with tab1:
                 st.dataframe(
                     df_filtered.describe(),
-                    use_container_width=True
+                    width=True
                 )
             
             with tab2:
@@ -2775,7 +2775,7 @@ L'équipe VentesPRO
                         marginal='box'
                     )
                     fig.update_layout(height=400, template='plotly_white')
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
         
         # ==================== PAGE RAPPORTS ====================
         with tab_reports:
@@ -2844,7 +2844,7 @@ L'équipe VentesPRO
                         template='plotly_white'
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
                 
                 with col2:
                     st.markdown("#### 📉 5 Catégories les Moins Performantes")
@@ -2867,7 +2867,7 @@ L'équipe VentesPRO
                         template='plotly_white'
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width=True)
             
             # Évolution temporelle
             st.markdown("#### 📈 Évolution des Valeurs")
@@ -2900,7 +2900,7 @@ L'équipe VentesPRO
                 template='plotly_white'
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width=True)
             
             # Insights et recommandations
             st.markdown("---")
@@ -3023,7 +3023,7 @@ Fin du Rapport
                 data=rapport_complet,
                 file_name=f"rapport_ventes_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                 mime="text/plain",
-                use_container_width=True,
+                width=True,
                 type="primary"
             )
         
@@ -3034,7 +3034,7 @@ Fin du Rapport
             st.info("🤖 Cette section utilise des algorithmes d'IA pour générer des insights automatiques")
             
             # Générer insights
-            if st.button("🚀 Générer les Insights", type="primary", use_container_width=True):
+            if st.button("🚀 Générer les Insights", type="primary", width=True):
                 with st.spinner("🧠 Analyse en cours..."):
                     # Simuler l'analyse
                     import time
@@ -3270,7 +3270,7 @@ Fin du Rapport
                     height=150
                 )
                 
-                submitted = st.form_submit_button("📤 Envoyer le Message", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("📤 Envoyer le Message", type="primary", width=True)
                 
                 if submitted:
                     if nom_support and email_support and message_support:
